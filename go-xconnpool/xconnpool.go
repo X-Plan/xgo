@@ -7,8 +7,9 @@
 // 修订人: blinklv <blinklv@icloud.com>
 // 修订日期: 2016-10-12
 
-// go-xconnpool实现了一个并发安全的连接池, 并且满足
-// net.Conn接口. 这个包可以用来管理和重用连接.
+// go-xconnpool实现了一个并发安全的连接池, 该连接池
+// 可以用来管理和重用连接, 由该连接池产生的连接满足
+// net.Conn接口规范.
 package xconnpool
 
 import (
@@ -17,7 +18,7 @@ import (
 )
 
 // 如果连接池已经关闭却还对其进行操作
-// 会抛出如下错误.
+// 会抛出该错误.
 var ErrClosed = errors.New("XConnPool has been closed")
 
 // XConn是net.Conn的一个具体实现.XConn并不是并
@@ -46,7 +47,10 @@ func (xc *XConn) Close() error {
 
 // 将连接标记为不再使用, 在这种情况下XConn的
 // Close操作不会再将该连接放回连接池, 而是真
-// 的将其释放掉.
+// 的将其释放掉. 因为连接池本身的意义就是避免
+// 连接的过度创建与释放, 并且多余的连接会在
+// Close中被释放掉, 所以大部分情况下你不会使
+// 用该函数.
 func (xc *XConn) Unuse() {
 	xc.unuse = true
 }
