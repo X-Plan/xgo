@@ -31,7 +31,7 @@ var (
 	flagDelay = flag.Duration("delay", time.Second, "handle delay")
 
 	// TCP服务端口号.
-	flagPort = flag.String("port", "8000", "tcp port")
+	flagPort = flag.String("port", "8000", "listen port")
 )
 
 var (
