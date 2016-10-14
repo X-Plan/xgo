@@ -15,7 +15,7 @@ Go的原生Channel.
 
 ## 例子
 
-```
+``` go
 var (
     // 创建一个连接生产函数用于产生基础的连接, 这里选择对net.Dial进行一层简单封装
     factory = func() (net.Conn, error) {
