@@ -29,7 +29,7 @@ import (
 
 var (
 	// 连接池的容量.
-	flagCapacity = flag.Int("capacity", 100, "capacity of connection pool")
+	flagCapacity = flag.Int("capacity", 10, "capacity of connection pool")
 
 	// 服务端的主机地址.
 	flagHost = flag.String("host", "127.0.0.1", "host of server")
@@ -38,10 +38,13 @@ var (
 	flagPort = flag.String("port", "8000", "server port")
 
 	// 会话次数.
-	flagSessionNumber = flag.Int("session-number", 100, "session number")
+	flagSessionNumber = flag.Int("session-number", 10, "session number")
 
 	// 每次会话发送消息的次数.
-	flagMsgNumber = flag.Int("msg-number", 100, "message number per session")
+	flagMsgNumber = flag.Int("msg-number", 10, "message number per session")
+
+	// 测试次数
+	flagTestNumber = flag.Int("test-number", 3, "test number")
 )
 
 // 换行符.
@@ -54,6 +57,7 @@ func main() {
 		capacity = *flagCapacity
 		sn       = *flagSessionNumber
 		mn       = *flagMsgNumber
+		tn       = *flagTestNumber
 		wg       = &sync.WaitGroup{}
 		err      error
 		addr     = *flagHost + ":" + *flagPort
@@ -73,46 +77,52 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 创建会话.
-	for i := 0; i < sn; i++ {
-		wg.Add(1)
-		// si(session index)为每个会话的编号.
-		go func(si int) {
-			defer func() {
-				count := atomic.AddInt32(&csn, int32(-1))
-				fmt.Fprintf(os.Stdout, "[State] Current Session Number: %d XConnPool Size: %d\n", count, xcp.Size())
-				wg.Done()
-			}()
+	for j := 0; j < tn; j++ {
+		fmt.Fprintf(os.Stdout, "[Test: %d] Start\n", j)
 
-			fmt.Fprintf(os.Stdout, "[Session: %d] Start\n", si)
-			count := atomic.AddInt32(&csn, int32(1))
+		// 创建会话.
+		for i := 0; i < sn; i++ {
+			wg.Add(1)
+			// si(session index)为每个会话的编号.
+			go func(si int) {
+				defer func() {
+					count := atomic.AddInt32(&csn, int32(-1))
+					fmt.Fprintf(os.Stdout, "[State] Current Session Number: %d XConnPool Size: %d\n", count, xcp.Size())
+					wg.Done()
+				}()
 
-			// 从连接池中获取连接.
-			conn, err := xcp.Get()
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "[Session: %d] Error Exit (%s)\n", err)
-				return
-			}
-			defer conn.Close()
-			fmt.Fprintf(os.Stdout, "[State] Current Session Number: %d	XConnPool Size: %d\n", count, xcp.Size())
+				fmt.Fprintf(os.Stdout, "[Session: %d] Start\n", si)
+				count := atomic.AddInt32(&csn, int32(1))
 
-			// 发送消息.
-			for i := 0; i < mn; i++ {
-				fmt.Fprintf(conn, "[Session: %d] %d\n", si, i)
-				r := bufio.NewReader(conn)
-				line, err := r.ReadString(newline)
+				// 从连接池中获取连接.
+				conn, err := xcp.Get()
 				if err != nil {
 					fmt.Fprintf(os.Stdout, "[Session: %d] Error Exit (%s)\n", err)
 					return
 				}
-				fmt.Fprintf(os.Stdout, "%s", line)
-			}
+				defer conn.Close()
+				fmt.Fprintf(os.Stdout, "[State] Current Session Number: %d	XConnPool Size: %d\n", count, xcp.Size())
 
-			fmt.Fprintf(os.Stdout, "[Session: %d] End\n", si)
-		}(i)
+				// 发送消息.
+				for i := 0; i < mn; i++ {
+					fmt.Fprintf(conn, "[Session: %d] %d\n", si, i)
+					r := bufio.NewReader(conn)
+					line, err := r.ReadString(newline)
+					if err != nil {
+						fmt.Fprintf(os.Stdout, "[Session: %d] Error Exit (%s)\n", err)
+						return
+					}
+					fmt.Fprintf(os.Stdout, "%s", line)
+				}
+
+				fmt.Fprintf(os.Stdout, "[Session: %d] End\n", si)
+			}(i)
+		}
+
+		wg.Wait()
+		fmt.Fprintf(os.Stdout, "[Test: %d] End\n", j)
 	}
 
-	wg.Wait()
 	// 这里进行延时3秒, 用来观测服务端的部分连接是
 	// 在客户端调用关闭连接池后才关闭的.
 	fmt.Fprintf(os.Stdout, "[INFO] Close XConnPool (But you have to wait 3s)\n")
