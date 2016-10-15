@@ -22,6 +22,7 @@ var (
 	Version = "1.0.0"
 )
 
+// 断言实际值等于期望值.
 func Equal(t *testing.T, exp, act interface{}, args ...interface{}) {
 	result := reflect.DeepEqual(exp, act)
 	assert(t, result, func() {
@@ -33,6 +34,7 @@ func Equal(t *testing.T, exp, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
+// 断言实际值不等于期望值.
 func NotEqual(t *testing.T, exp, act interface{}, args ...interface{}) {
 	result := !reflect.DeepEqual(exp, act)
 	assert(t, result, func() {
@@ -44,6 +46,7 @@ func NotEqual(t *testing.T, exp, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
+// 断言实际值为空.
 func IsNil(t *testing.T, act interface{}, args ...interface{}) {
 	result := isNil(act)
 	assert(t, result, func() {
@@ -55,6 +58,7 @@ func IsNil(t *testing.T, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
+// 断言实际值不为空.
 func NotNil(t *testing.T, act interface{}, args ...interface{}) {
 	result := !isNil(act)
 	assert(t, result, func() {

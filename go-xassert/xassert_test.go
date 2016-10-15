@@ -75,3 +75,35 @@ func TestNotNil(t *testing.T) {
 	NotNil(t, notPtr, "notPtr")
 	NotNil(t, notSlice, "notSlice")
 }
+
+type foo struct {
+	x int
+	b string
+}
+
+type bar struct {
+	a int
+	b string
+	c map[int]string
+	d foo
+}
+
+func TestFoo(t *testing.T) {
+	var (
+		a map[int]string
+		b = bar{
+			a: 1,
+			b: "hello world",
+			c: make(map[int]string),
+			d: foo{
+				x: 1,
+				b: "who are you?",
+			},
+		}
+	)
+
+	IsNil(t, a)
+	NotNil(t, b)
+	NotEqual(t, a, b)
+	// Equal(t, a, b)
+}
