@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-14
+// 修订日期: 2016-10-16
 
 // go-xconnpool实现了一个并发安全的连接池, 该连接池
 // 可以用来管理和重用连接, 由该连接池产生的连接满足
@@ -18,11 +18,13 @@ import (
 )
 
 // 版本信息
-var Version = "1.0.0"
+var Version = "1.1.0"
 
 // 如果连接池已经关闭却还对其进行操作
 // 会抛出该错误.
 var ErrClosed = errors.New("XConnPool has been closed")
+
+var ErrXConnIsNil = errors.New("XConn is nil")
 
 // XConn是net.Conn的一个具体实现.XConn并不是并
 // 发安全的对象, 因此你不应该将XConn置于并发环
@@ -35,17 +37,29 @@ type XConn struct {
 
 // 每一个XConn都会与一个特定的XConnPool相关联.
 // XConn的关闭操作不是简单的释放连接, 而是有
-// 选择的将连接归还到XConnPool进行重用.
+// 选择的将连接归还到XConnPool进行重用. 如果
+// 一个XConn已经关闭, 对应的net.Conn会被置为
+// nil, 因此你不应该继续使用该XConn.
 func (xc *XConn) Close() error {
+	var (
+		err error
+	)
+
 	// 如果确定不再使用, 则释放原生连接.
 	if xc.unuse {
 		if xc.Conn != nil {
-			return xc.Conn.Close()
+			err = xc.Conn.Close()
+			xc.Conn = nil
+			return err
 		}
-		return nil
+		return ErrXConnIsNil
 	}
 	// 将原生连接归还到连接池.
-	return xc.xcp.put(xc.Conn)
+	err = xc.xcp.put(xc.Conn)
+	// 将连接置为空, 避免对XConn的
+	// 重复Close.
+	xc.Conn = nil
+	return err
 }
 
 // 将连接标记为不再使用, 在这种情况下XConn的
@@ -75,6 +89,10 @@ type XConnPool struct {
 // 连接. 调用者应该检测返回值是否为nil.
 func New(capacity int, factory Factory) *XConnPool {
 	if capacity <= 0 {
+		return nil
+	}
+
+	if factory == nil {
 		return nil
 	}
 
@@ -127,7 +145,7 @@ func (xcp *XConnPool) wrapConn(conn net.Conn) net.Conn {
 func (xcp *XConnPool) put(conn net.Conn) (err error) {
 	// 空连接直接拒绝.
 	if conn == nil {
-		err = errors.New("net.Conn is nil")
+		err = ErrXConnIsNil
 		return
 	}
 

@@ -22,10 +22,26 @@ func TestPanic(t *testing.T) {
 	})
 	xassert.NotNil(t, xcp)
 
+	// 测试XConn的重复关闭.
 	conn, err := xcp.Get()
 	xassert.IsNil(t, err)
 
-	// 先关闭连接池.
+	xassert.IsNil(t, conn.Close())
+	xassert.Equal(t, ErrXConnIsNil, conn.Close())
+
+	conn, err = xcp.Get()
+	xassert.IsNil(t, err)
+	xc := conn.(*XConn)
+	xc.Unuse()
+
+	xassert.IsNil(t, conn.Close())
+	xassert.Equal(t, ErrXConnIsNil, conn.Close())
+
+	// 测试XConnPool的重复关闭.
+	conn, err = xcp.Get()
+	xassert.IsNil(t, err)
+
+	// 关闭连接池.
 	err = xcp.Close()
 	xassert.IsNil(t, err)
 
