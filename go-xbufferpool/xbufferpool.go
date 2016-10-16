@@ -23,6 +23,8 @@ var Version = "1.0.0"
 // 会抛出该错误.
 var ErrClosed = errors.New("XBufferPool has been closed")
 
+var ErrXBufferIsNil = errors.New("XBuffer is nil")
+
 // XBuffer是对bytes.Buffer一层封装. 你可以将
 // XBuffer当成bytes.Buffer一样使用. XBuffer
 // 与一个特定的连接池绑定, 使XBuffer的Close
@@ -44,7 +46,13 @@ type XBuffer struct {
 // 在使用该XBuffer, 如果你真的不再使用, 只需要
 // 忽略它然后等待垃圾回收帮你解决就行了.
 func (xb *XBuffer) Close() error {
-	return xb.xbp.put(xb.Buffer)
+	err := xb.xbp.put(xb.Buffer)
+	xb.Buffer = nil
+	// 这里不用将相关的XBufferPool也设置为
+	// 为空, 首先这个字段对用户不可见, 其次
+	// 当用户再次调用XBuffer的Close函数时候
+	// 不会因此而panic.
+	return err
 }
 
 // 缓冲区池, 为了满足并发安全, 它在实现上用
@@ -113,7 +121,7 @@ func (xbp *XBufferPool) wrapBuffer(buf *bytes.Buffer) *XBuffer {
 func (xbp *XBufferPool) put(buf *bytes.Buffer) (err error) {
 	// 空缓冲区直接拒绝.
 	if buf == nil {
-		err = errors.New("bytes.Buffer is nil")
+		err = ErrXBufferIsNil
 		return
 	}
 
@@ -128,6 +136,9 @@ func (xbp *XBufferPool) put(buf *bytes.Buffer) (err error) {
 			err = ErrClosed
 		}
 	}()
+
+	// 将内容重置.
+	buf.Reset()
 
 	select {
 	// 缓冲池未关闭且存在空闲空间, 则归还成功.
@@ -156,4 +167,9 @@ func (xbp *XBufferPool) Close() (err error) {
 		}
 	}
 	return
+}
+
+// 获取缓冲池当前的大小.
+func (xbp *XBufferPool) Size() int {
+	return len(xbp.buffers)
 }
