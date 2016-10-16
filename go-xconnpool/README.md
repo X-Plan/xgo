@@ -1,7 +1,7 @@
 #go-xconnpool
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 
 **go-xconnpool**包实现了一个并发安全的连接池, 它可以用来管理和重用连接.  
 该包有两个主要的结构体: 
