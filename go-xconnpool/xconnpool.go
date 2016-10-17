@@ -1,11 +1,11 @@
 // xconnpool.go
 //
-//		Copyright (C), blinklv. All right reserved.
+//		Copyright (C), blinklv. All rights reserved.
 //
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-16
+// 修订日期: 2016-10-18
 
 // go-xconnpool实现了一个并发安全的连接池, 该连接池
 // 可以用来管理和重用连接, 由该连接池产生的连接满足
