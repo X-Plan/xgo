@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-14
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-18
+// 修订日期: 2016-10-22
 
 // go-xassert是一个方便测试使用的断言包.
 package xassert
@@ -15,58 +15,67 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"testing"
 )
 
 var (
-	Version = "1.0.0"
+	Version = "1.1.0"
 )
 
+// 该接口的目的是为了统一
+// *testing.T和*testing.B,
+// 它是该库用到的最小功能
+// 集合.
+type XT interface {
+	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
+	FailNow()
+}
+
 // 断言实际值等于期望值.
-func Equal(t *testing.T, exp, act interface{}, args ...interface{}) {
+func Equal(xt XT, exp, act interface{}, args ...interface{}) {
 	result := reflect.DeepEqual(exp, act)
-	assert(t, result, func() {
+	assert(xt, result, func() {
 		str := fmt.Sprintf("%#v != %#v", exp, act)
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}
-		t.Error(str)
+		xt.Error(str)
 	}, 1)
 }
 
 // 断言实际值不等于期望值.
-func NotEqual(t *testing.T, exp, act interface{}, args ...interface{}) {
+func NotEqual(xt XT, exp, act interface{}, args ...interface{}) {
 	result := !reflect.DeepEqual(exp, act)
-	assert(t, result, func() {
+	assert(xt, result, func() {
 		str := fmt.Sprintf("%#v == %#v", exp, act)
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}
-		t.Error(str)
+		xt.Error(str)
 	}, 1)
 }
 
 // 断言实际值为空.
-func IsNil(t *testing.T, act interface{}, args ...interface{}) {
+func IsNil(xt XT, act interface{}, args ...interface{}) {
 	result := isNil(act)
-	assert(t, result, func() {
+	assert(xt, result, func() {
 		str := fmt.Sprintf("%#v is not nil", act)
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}
-		t.Error(str)
+		xt.Error(str)
 	}, 1)
 }
 
 // 断言实际值不为空.
-func NotNil(t *testing.T, act interface{}, args ...interface{}) {
+func NotNil(xt XT, act interface{}, args ...interface{}) {
 	result := !isNil(act)
-	assert(t, result, func() {
+	assert(xt, result, func() {
 		str := fmt.Sprintf("%#v is nil", act)
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}
-		t.Error(str)
+		xt.Error(str)
 	}, 1)
 }
 
@@ -83,11 +92,11 @@ func isNil(act interface{}) bool {
 	return false
 }
 
-func assert(t *testing.T, result bool, cb func(), cd int) {
+func assert(xt XT, result bool, cb func(), cd int) {
 	if !result {
 		_, file, line, _ := runtime.Caller(cd + 1)
-		t.Errorf("%s:%d", filepath.Base(file), line)
+		xt.Errorf("%s:%d", filepath.Base(file), line)
 		cb()
-		t.FailNow()
+		xt.FailNow()
 	}
 }
