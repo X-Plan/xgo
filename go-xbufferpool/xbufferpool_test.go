@@ -5,12 +5,15 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-16
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-18
+// 修订日期: 2016-10-22
 package xbufferpool
 
 import (
+	"bytes"
 	"github.com/X-Plan/xgo/go-xassert"
+	"runtime"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -81,3 +84,118 @@ func TestBufferPool(t *testing.T) {
 		xassert.IsNil(t, xb.Close())
 	}
 }
+
+// 测试性能. 主要是和不用缓冲池做对比.
+func benchmarkBufferPool(dataSize int, b *testing.B) {
+	// 制造一份数据用于写入.
+	var (
+		data = make([]byte, dataSize)
+	)
+	for i := 0; i < len(data); i++ {
+		data[i] = byte('1')
+	}
+
+	// 先进行一次垃圾回收.
+	runtime.GC()
+
+	var (
+		xbp = New(b.N, 0)
+		wg  = &sync.WaitGroup{}
+	)
+
+	b.StartTimer()
+	// 100个go-routine同时获取, 每个go-routine
+	// 获取b.N次缓存.
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			var (
+				xb *XBuffer
+			)
+			for i := 0; i < b.N; i++ {
+				xb, _ = xbp.Get()
+				xb.Write(data)
+				xb.Close()
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	b.StopTimer()
+}
+
+// 这里构造一个鸡肋缓存池用作对比.
+type dummyBuffer struct {
+	*bytes.Buffer
+}
+
+func (db *dummyBuffer) Close() error {
+	return nil
+}
+
+type dummyBufferPool struct{}
+
+func (dbp *dummyBufferPool) Get() (*dummyBuffer, error) {
+	db := &dummyBuffer{}
+	db.Buffer = new(bytes.Buffer)
+	return db, nil
+}
+
+func (dbp *dummyBufferPool) Close() error {
+	return nil
+}
+
+// 性能测试, 使用傀儡缓存池.
+func benchmarkDummyBufferPool(dataSize int, b *testing.B) {
+	// 制造一份数据用于写入.
+	var (
+		data = make([]byte, dataSize)
+	)
+	for i := 0; i < len(data); i++ {
+		data[i] = byte('1')
+	}
+
+	// 先进行一次垃圾回收.
+	runtime.GC()
+
+	var (
+		dbp = &dummyBufferPool{}
+		wg  = &sync.WaitGroup{}
+	)
+
+	b.StartTimer()
+	// 100个go-routine同时获取, 每个go-routine
+	// 获取b.N次缓存.
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			var (
+				db *dummyBuffer
+			)
+			for i := 0; i < b.N; i++ {
+				db, _ = dbp.Get()
+				db.Write(data)
+				db.Close()
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	b.StopTimer()
+}
+
+func BenchmarkBufferPool128(b *testing.B)  { benchmarkBufferPool(128, b) }
+func BenchmarkBufferPool256(b *testing.B)  { benchmarkBufferPool(256, b) }
+func BenchmarkBufferPool512(b *testing.B)  { benchmarkBufferPool(512, b) }
+func BenchmarkBufferPool1024(b *testing.B) { benchmarkBufferPool(1024, b) }
+func BenchmarkBufferPool2048(b *testing.B) { benchmarkBufferPool(2048, b) }
+func BenchmarkBufferPool4096(b *testing.B) { benchmarkBufferPool(4096, b) }
+func BenchmarkBufferPool8192(b *testing.B) { benchmarkBufferPool(8192, b) }
+
+func BenchmarkDummyBufferPool128(b *testing.B)  { benchmarkDummyBufferPool(128, b) }
+func BenchmarkDummyBufferPool256(b *testing.B)  { benchmarkDummyBufferPool(256, b) }
+func BenchmarkDummyBufferPool512(b *testing.B)  { benchmarkDummyBufferPool(512, b) }
+func BenchmarkDummyBufferPool1024(b *testing.B) { benchmarkDummyBufferPool(1024, b) }
+func BenchmarkDummyBufferPool2048(b *testing.B) { benchmarkDummyBufferPool(2048, b) }
+func BenchmarkDummyBufferPool4096(b *testing.B) { benchmarkDummyBufferPool(4096, b) }
+func BenchmarkDummyBufferPool8192(b *testing.B) { benchmarkDummyBufferPool(8192, b) }
