@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -36,6 +37,15 @@ const (
 	INFO
 	DEBUG
 )
+
+var levelTags = [...]string{
+	"",
+	"[FATAL]",
+	"[ERROR]",
+	"[WARN]",
+	"[INFO]",
+	"[DEBUG]",
+}
 
 // 如果日志已经关闭还对其进行操作会抛出
 // 该错误.
@@ -96,7 +106,8 @@ type XLogger struct {
 	// 为了在并发环境下使用XLogger, 涉及到
 	// 写文件的操作时, 需要将并行化的消息
 	// 串行化写入到文件中. 因此这里选用一个
-	// 通道来完成这一串行化的过程.
+	// 通道来完成这一串行化的过程. 对该管道
+	// 写操作是阻塞的.
 	bc chan []byte
 
 	// 用来终止flush协程.
@@ -176,16 +187,41 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 		}
 	}()
 
-	// 优先捕获错误.
 	select {
 	case err = <-xl.errorChan:
-		n, err = 0, err
+		// 这里需要处理errorChan已经关闭
+		// 情形.
+		if err == nil {
+			n, err = 0, ErrClosed
+		} else {
+			n, err = 0, err
+		}
 	case xl.bc <- b:
 		// 这样的返回是为了满足io.Writer接口.
 		n, err = len(b), nil
 	}
 
 	return
+}
+
+func (xl *XLogger) Fatal(format string, args ...interface{}) error {
+	return xl.output(FATAL, fmt.Sprintf(format, args...))
+}
+
+func (xl *XLogger) Error(format string, args ...interface{}) error {
+	return xl.output(ERROR, fmt.Sprintf(format, args...))
+}
+
+func (xl *XLogger) Warn(format string, args ...interface{}) error {
+	return xl.output(WARN, fmt.Sprintf(format, args...))
+}
+
+func (xl *XLogger) Info(format string, args ...interface{}) error {
+	return xl.output(INFO, fmt.Sprintf(format, args...))
+}
+
+func (xl *XLogger) Debug(format string, args ...interface{}) error {
+	return xl.output(DEBUG, fmt.Sprintf(format, args...))
 }
 
 // 关闭XLogger. 如果一个日志已经关闭, 则对日志的
@@ -200,82 +236,130 @@ func (xl *XLogger) Close() (err error) {
 		}
 	}()
 
-	// 先关闭bc, 首先阻止Write函数的使用.
-	// 但是其中的残留数据依然会被读取.
+	// 关闭资源的策略是资源被哪个协程写
+	// 就在对应的协程被关闭. 这里的资源
+	// 主要是Channel和文件. 尤其是Channel,
+	// 当多协程的时候出现读/写一个关闭的
+	// Channel是很常见的情况. 读一个关闭的
+	// Channel并没有有什么影响, 但是写一个
+	// Channel则会抛出panic. 所以将对管道的
+	// 写/关闭操作放在同一个协程可以保证
+	// 操作的正确性.
 	close(xl.bc)
-
-	// 发送退出信号, 终止flush协程.
 	close(xl.exitChan)
-
-	// 关闭文件.
-	if xl.f != nil {
-		xl.Close()
-	}
 
 	return
 }
 
 func (xl *XLogger) flush() {
-	var err error
-
 	// flush函数是以bc为优先的,
 	// 这样即便收到了退出信号也会
 	// 将残留的日志写入到磁盘.
 	for {
 		select {
-		// 收到退出信号, 执行退出.
-		// 这里应该注意, 两个case
-		// 顺序. 如果调换位置程序
-		// 可能会阻塞而无法退出.
+		case b := <-xl.bc:
+			// 处理bc已经关闭的情形, 当传入的
+			// 为nil则不做处理, 当然用户可以
+			// 手动写入nil, 但是这样的数据有
+			// 什么意义呢 :)
+			if b != nil {
+				xl.write(b)
+			}
+
 		case <-xl.exitChan:
+			// 先将bc中的残留数据进行处理.
+			for b := range xl.bc {
+				xl.write(b)
+			}
+
+			// 因为文件和errorChan的写
+			// 操作是在flush中执行, 所以
+			// 也应该在这里关闭.
+			if xl.f != nil {
+				xl.f.Close()
+			}
+			close(xl.errorChan)
 			return
 
-		// XLogger会在打开就文件和创建新文件
-		// 这两个操作之前进行清理操作.
-		case b := <-xl.bc:
-			// 初始化XLogger.
-			if xl.f == nil {
-				// 先清理再打开.
-				if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
-					goto handle_error
-				}
+		}
+	}
+}
 
-				if xl.f, err = openFile(xl.dir); err != nil {
-					goto handle_error
-				}
-			}
+// 这个write函数不同于Write函数, 它是将
+// 用于将数据写向文件的. XLogger会在打
+// 开就文件和创建新文件这两个操作之前进
+// 行清理操作.
+func (xl *XLogger) write(b []byte) {
+	var err error
+	// 初始化XLogger.
+	if xl.f == nil {
+		// 先清理再打开.
+		if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
+			goto handle_error
+		}
 
-			// 目录下的日志文件都不符合要求或
-			// 当前日志文件的大小超标.
-			if xl.f == nil || (xl.ms > 0 && xl.f.Size >= xl.ms) {
-				// 先清理再创建.
-				if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
-					goto handle_error
-				}
+		if xl.f, err = openFile(xl.dir); err != nil {
+			goto handle_error
+		}
+	}
 
-				if xl.f, err = createFile(xl.dir); err != nil {
-					goto handle_error
-				}
-			}
+	// 目录下的日志文件都不符合要求或
+	// 当前日志文件的大小超标.
+	if xl.f == nil || (xl.ms > 0 && xl.f.Size >= xl.ms) {
+		// 先清理再创建.
+		if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
+			goto handle_error
+		}
 
-			_, err = xl.f.Write(b)
+		if xl.f, err = createFile(xl.dir); err != nil {
+			goto handle_error
+		}
+	}
 
-			// 传递错误给主调协程.
-		handle_error:
-			if err != nil {
-				// errorChan只有一个缓冲区, 所以
-				// errorChan中的错误还没有被主协
-				// 程捕获之前又生成了新的错误,
-				// 这里的需要将老的错误排出, 然后
-				// 写入新的错误.
-				select {
-				case xl.errorChan <- err:
-				case _ = <-xl.errorChan:
-					xl.errorChan <- err
-				}
+	_, err = xl.f.Write(b)
+
+	// 传递错误给主调协程.
+handle_error:
+	if err != nil {
+		// errorChan只有一个缓冲区, 所以
+		// errorChan中的错误还没有被主协
+		// 程捕获之前又生成了新的错误,
+		// 这里的需要将老的错误排出, 然后
+		// 写入新的错误. 这里的写法并不多
+		// 余. 这里必须保证两个操作都是非
+		// 阻塞的.
+		select {
+		case xl.errorChan <- err:
+		default:
+			select {
+			// 因为操作不是原子的, 所以在
+			// 判断没有空间和读取老数据之间
+			// 父协程可能将数据已经读取了.
+			case <-xl.errorChan:
+				xl.errorChan <- err
+			default:
+				return
 			}
 		}
 	}
+}
+
+// 对输出进行包装. 附带一些标签信息.
+func (xl *XLogger) output(level int, m string) (err error) {
+	s := strings.Join([]string{
+		timeTag(),
+		"[", xl.tag, "]",
+		levelTags[level],
+		locationTag(level, 2),
+		":", m, "\n",
+	}, "")
+
+	if level <= xl.level {
+		_, err = xl.Write([]byte(s))
+	} else {
+		_, err = fmt.Fprintf(os.Stderr, s)
+	}
+	return
 }
 
 // 对文件指针进行一层封装, 提供一个写
@@ -490,4 +574,26 @@ func time2name(t time.Time) string {
 // 获取完整的文件名称.
 func getName(dir string, t time.Time) string {
 	return filepath.Join(dir, time2name(t))
+}
+
+// 生成一个时间字段用于日志的
+// 格式化输出.
+func timeTag() string {
+	t := time.Now()
+	return fmt.Sprintf("[%04d-%02d-%02d %02d:%02d:%02d]",
+		int(t.Year()), int(t.Month()), int(t.Day()), int(t.Hour()), int(t.Minute()), int(t.Second()))
+}
+
+// 定位标签, 在Info函数中不会使用.
+func locationTag(level int, skip int) string {
+	if level == INFO {
+		return ""
+	}
+
+	pc, file, line, ok := runtime.Caller(skip + 1)
+	if !ok {
+		return "[]" // Location failure.
+	}
+	f := runtime.FuncForPC(pc)
+	return fmt.Sprintf("[%s(%d) - %s]", filepath.Base(file), line, f.Name())
 }
