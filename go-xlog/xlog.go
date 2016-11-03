@@ -5,15 +5,21 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-02
+// 修订日期: 2016-11-03
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -58,12 +64,14 @@ type XConfig struct {
 	// 没有限制.
 	MaxAge string `json:"max_age"`
 
-	// 日志标签.
+	// 日志标签. 如果没有设置则默认为
+	// 进程名称.
 	Tag string `json:"tag"`
 
 	// 日志级别 (调用Write函数时不考虑该值).
 	// 只有操作优先级高于或等于日志级别的
-	// 情况下日志才会被写入到文件.
+	// 情况下日志才会被写入到文件. 否则会被
+	// 打印到标准错误输出.
 	Level int `json:"level"`
 }
 
@@ -73,7 +81,7 @@ type XConfig struct {
 // '[tag]' 为用户自定义标签
 // '[level]' 为记录的优先级别
 // '[location]' 事件发生的位置, 包括文件名, 行号, 相关的函数.
-//  这个标签只有在使用Debug()函数时才会打印.
+// Info()函数不会打印location信息.
 // 'message' 为用户自定义数据.
 //
 // 直接调用Write函数时只会记录message, 没有前面的附加记录.
@@ -93,6 +101,13 @@ type XLogger struct {
 
 	// 用来终止flush协程.
 	exitChan chan int
+
+	// 用来从flush协程中获取错误
+	// 信息.
+	errorChan chan error
+
+	// 文件指针.
+	f *file
 }
 
 func New(xcfg *XConfig) (*XLogger, error) {
@@ -128,17 +143,22 @@ func New(xcfg *XConfig) (*XLogger, error) {
 		return nil, err
 	}
 
-	xl.tag = xcfg.Tag
+	if xcfg.Tag != "" {
+		xl.tag = xcfg.Tag
+	} else {
+		xl.tag = filepath.Base(os.Args[0])
+	}
 
-	if xcfg.Level >= 0 && xcfg.Level <= DEBUG {
+	if xcfg.Level >= FATAL && xcfg.Level <= DEBUG {
 		xl.level = xcfg.Level
 	} else {
 		return nil, fmt.Errorf("Level is invalid")
 	}
 
-	// 缓存的大小为60条消息.
-	xl.bc = make(chan []byte, 60)
+	// 缓存的大小为128条消息.
+	xl.bc = make(chan []byte, 128)
 	xl.exitChan = make(chan int)
+	xl.errorChan = make(chan error, 1)
 
 	// 异步执行数据同步到文件中的任务.
 	go xl.flush()
@@ -148,25 +168,35 @@ func New(xcfg *XConfig) (*XLogger, error) {
 
 // 将数据写入到XLogger. 通常情况下你不需要直接
 // 调用该接口. 除非你已经拥有良好的日志格式.
-func (xl *XLogger) Write(b []byte) (int, error) {
+func (xl *XLogger) Write(b []byte) (n int, err error) {
 	// 捕获写已经关闭的channel所产生的panic.
 	defer func() {
 		if x := recover(); x != nil {
-			return 0, ErrClosed
+			n, err = 0, ErrClosed
 		}
 	}()
 
-	xl.bc <- b
-	// 这样的返回是为了满足io.Writer接口.
-	return len(b), nil
+	// 优先捕获错误.
+	select {
+	case err = <-xl.errorChan:
+		n, err = 0, err
+	case xl.bc <- b:
+		// 这样的返回是为了满足io.Writer接口.
+		n, err = len(b), nil
+	}
+
+	return
 }
 
-func (xl *XLogger) Close() error {
+// 关闭XLogger. 如果一个日志已经关闭, 则对日志的
+// 任何操作都会返回ErrClosed错误. 如果日志在写文
+// 件的时候出现问题, 日志也会被异常关闭.
+func (xl *XLogger) Close() (err error) {
 	// 关闭一个已经关闭的channel会产生
 	// panic, 这里也需要对其进行捕获.
 	defer func() {
 		if x := recover(); x != nil {
-			return ErrClosed
+			err = ErrClosed
 		}
 	}()
 
@@ -177,20 +207,261 @@ func (xl *XLogger) Close() error {
 	// 发送退出信号, 终止flush协程.
 	close(xl.exitChan)
 
-	return nil
+	// 关闭文件.
+	if xl.f != nil {
+		xl.Close()
+	}
+
+	return
 }
 
 func (xl *XLogger) flush() {
+	var err error
+
 	// flush函数是以bc为优先的,
 	// 这样即便收到了退出信号也会
 	// 将残留的日志写入到磁盘.
 	for {
 		select {
-		case b := <-xl.bc:
+		// 收到退出信号, 执行退出.
+		// 这里应该注意, 两个case
+		// 顺序. 如果调换位置程序
+		// 可能会阻塞而无法退出.
 		case <-xl.exitChan:
-			// 收到退出信号, 执行退出.
 			return
+
+		// XLogger会在打开就文件和创建新文件
+		// 这两个操作之前进行清理操作.
+		case b := <-xl.bc:
+			// 初始化XLogger.
+			if xl.f == nil {
+				// 先清理再打开.
+				if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
+					goto handle_error
+				}
+
+				if xl.f, err = openFile(xl.dir); err != nil {
+					goto handle_error
+				}
+			}
+
+			// 目录下的日志文件都不符合要求或
+			// 当前日志文件的大小超标.
+			if xl.f == nil || (xl.ms > 0 && xl.f.Size >= xl.ms) {
+				// 先清理再创建.
+				if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
+					goto handle_error
+				}
+
+				if xl.f, err = createFile(xl.dir); err != nil {
+					goto handle_error
+				}
+			}
+
+			_, err = xl.f.Write(b)
+
+			// 传递错误给主调协程.
+		handle_error:
+			if err != nil {
+				// errorChan只有一个缓冲区, 所以
+				// errorChan中的错误还没有被主协
+				// 程捕获之前又生成了新的错误,
+				// 这里的需要将老的错误排出, 然后
+				// 写入新的错误.
+				select {
+				case xl.errorChan <- err:
+				case _ = <-xl.errorChan:
+					xl.errorChan <- err
+				}
+			}
 		}
+	}
+}
+
+// 对文件指针进行一层封装, 提供一个写
+// 缓存和大小的记录.
+type file struct {
+	*bufio.Writer
+	Fp   *os.File
+	Size int64
+}
+
+// 创建新文件.
+func createFile(dir string) (*file, error) {
+	var (
+		err error
+		f   = &file{}
+	)
+
+	f.Fp, err = os.OpenFile(getName(dir, time.Now()), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	f.Writer = bufio.NewWriter(f.Fp)
+	f.Size = int64(0)
+
+	return f, nil
+}
+
+// 打开指定目录下的最新文件.
+func openFile(dir string) (*file, error) {
+	var (
+		fiq *fileInfoQueue
+		err error
+		f   = &file{}
+	)
+
+	if fiq, err = createFileInfoQueue(dir); err != nil {
+		return nil, err
+	}
+	fiq.Sort()
+
+	if !fiq.IsEmpty() {
+		fi := fiq.Last()
+		// 这里默认不进行文件的创建.
+		f.Fp, err = os.OpenFile(getName(dir, fi.CreateTime), os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return nil, err
+		}
+
+		f.Writer = bufio.NewWriter(f.Fp)
+		f.Size = fi.Size
+
+		return f, nil
+	}
+
+	// 没有文件不代表存在错误.
+	return nil, nil
+}
+
+// 清除指定目录下的文件.
+func cleanup(dir string, ma time.Duration, mb int64) error {
+	var (
+		fiq *fileInfoQueue
+		err error
+	)
+
+	if fiq, err = createFileInfoQueue(dir); err != nil {
+		return err
+	}
+
+	fiq.Sort()
+	fiq.CleanUp(dir, ma, mb)
+
+	return nil
+}
+
+func (f *file) Write(b []byte) (int, error) {
+	n, err := f.Writer.Write(b)
+	f.Size += int64(n)
+	return n, err
+}
+
+func (f *file) Close() error {
+	if err := f.Writer.Flush(); err != nil {
+		return err
+	}
+	return f.Fp.Close()
+}
+
+// 文件信息的简易队列, 这是一个辅助结构.
+// 用于过期文件的清除.
+type fileInfo struct {
+	CreateTime time.Time
+	Size       int64
+}
+
+type fileInfoQueue []fileInfo
+
+func createFileInfoQueue(dir string) (*fileInfoQueue, error) {
+	var (
+		err error
+		sts []os.FileInfo
+		fiq fileInfoQueue
+	)
+
+	err = os.MkdirAll(dir, 0744)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取文件状态信息.
+	sts, err = ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	fiq = make([]fileInfo, 0, len(sts))
+	for _, st := range sts {
+		if !st.IsDir() && isValidName(st.Name()) {
+			fiq = append(fiq, fileInfo{name2time(st.Name()), st.Size()})
+		}
+	}
+
+	return &fiq, nil
+}
+
+// 这几个函数的定义是为了使用sort.Sort函数.
+func (fiq fileInfoQueue) Len() int {
+	return len(fiq)
+}
+
+func (fiq fileInfoQueue) Less(i, j int) bool {
+	return fiq[i].CreateTime.Before(fiq[j].CreateTime)
+}
+
+func (fiq fileInfoQueue) Swap(i, j int) {
+	fiq[i], fiq[j] = fiq[j], fiq[i]
+}
+
+func (fiq fileInfoQueue) Sort() {
+	sort.Sort(fiq)
+}
+
+func (fiq fileInfoQueue) IsEmpty() bool {
+	return len(fiq) == 0
+}
+
+func (fiq fileInfoQueue) Last() fileInfo {
+	return fiq[len(fiq)-1]
+}
+
+func (fiq *fileInfoQueue) Append(fi fileInfo) {
+	(*fiq) = append(*fiq, fi)
+}
+
+// 只有在队列处于排序状态下才可以使用该函数.
+// 该函数从保留个数和保留时间两个纬度来删除
+// 老文件.
+func (fiq *fileInfoQueue) CleanUp(dir string, maxAge time.Duration, maxBackups int64) {
+	var (
+		removes   []fileInfo
+		i         int64
+		n         int64
+		threshold time.Time
+	)
+
+	if maxBackups > 0 && int64(fiq.Len()) > maxBackups {
+		i += int64(fiq.Len()) - maxBackups
+	}
+
+	if maxAge > time.Duration(0) {
+		threshold = time.Now().Add((-1) * maxAge)
+		n = int64(fiq.Len())
+
+		for ; i < n; i++ {
+			if (*fiq)[i].CreateTime.After(threshold) {
+				break
+			}
+		}
+	}
+
+	removes = (*fiq)[:i]
+	*fiq = (*fiq)[i:]
+
+	for _, info := range removes {
+		os.Remove(filepath.Join(dir, time2name(info.CreateTime)))
 	}
 }
 
@@ -214,4 +485,9 @@ func name2time(name string) time.Time {
 func time2name(t time.Time) string {
 	return fmt.Sprintf("%04d_%02d_%02d_%02d_%02d_%02d_%09d", int(t.Year()), int(t.Month()),
 		int(t.Day()), int(t.Hour()), int(t.Minute()), int(t.Second()), int(t.Nanosecond()))
+}
+
+// 获取完整的文件名称.
+func getName(dir string, t time.Time) string {
+	return filepath.Join(dir, time2name(t))
 }
