@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-03
+// 修订日期: 2016-11-08
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
@@ -53,7 +53,11 @@ var ErrClosed = errors.New("XLogger has been closed")
 
 // 用于创建XLogger的配置.
 type XConfig struct {
-	// 日志文件的存储目录, 默认为当前目录.
+	// 日志文件的存储目录. 如果为空则替换为
+	// 当前执行目录下的log目录, 如果目录不存
+	// 在则主动创建(可能会因为权限原因创建
+	// 失败), 如果目录存在则该用具必须具备
+	// 写权限.
 	Dir string `json:"dir"`
 
 	// 每个日志文件的最大值, 单位是字节.
@@ -136,7 +140,17 @@ func New(xcfg *XConfig) (*XLogger, error) {
 	if xcfg.Dir != "" {
 		xl.dir = xcfg.Dir
 	} else {
-		xl.dir = "."
+		xl.dir = "./log"
+	}
+	// 创建目录, 如果目录已经存在则该操作
+	// 会被忽略. 可以参考GoDoc中对MkdirAll
+	// 的描述.
+	if err = os.MkdirAll(xl.dir, 0777); err != nil {
+		return nil, err
+	}
+	// 检测用户是否对该目录具备写权限.
+	if err = isWritable(xl.dir); err != nil {
+		return nil, err
 	}
 
 	if xcfg.MaxSize < 0 {
@@ -149,9 +163,13 @@ func New(xcfg *XConfig) (*XLogger, error) {
 	}
 	xl.mb = xcfg.MaxBackups
 
-	xl.ma, err = time.ParseDuration(xcfg.MaxAge)
-	if err != nil {
-		return nil, err
+	if xcfg.MaxAge != "" {
+		xl.ma, err = time.ParseDuration(xcfg.MaxAge)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		xl.ma = time.Duration(0)
 	}
 
 	if xcfg.Tag != "" {
@@ -596,4 +614,19 @@ func locationTag(level int, skip int) string {
 	}
 	f := runtime.FuncForPC(pc)
 	return fmt.Sprintf("[%s(%d) - %s]", filepath.Base(file), line, f.Name())
+}
+
+// 检测用户是否对特定的目录具备写权限.
+// 判断的依据就是查看用户是否可以在该
+// 目录下创建文件. 这是最可靠的办法,
+// 如果依靠file bit, 在文件系统是只读
+// 的方式进行挂载, 以及一些文件系统进行
+// 了ACL扩展的情况下会失败.
+func isWritable(dir string) error {
+	tmp, err := ioutil.TempFile(dir, "xlog_test")
+	if err != nil {
+		return err
+	}
+	os.Remove(tmp.Name())
+	return nil
 }
