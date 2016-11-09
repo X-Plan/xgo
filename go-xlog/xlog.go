@@ -383,7 +383,7 @@ func (xl *XLogger) output(level int, m string) (err error) {
 	if level <= xl.level {
 		_, err = xl.Write([]byte(s))
 	} else {
-		_, err = fmt.Fprintf(os.Stderr, s)
+		_, err = fmt.Fprintf(os.Stdout, s)
 	}
 	return
 }
