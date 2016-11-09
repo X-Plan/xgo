@@ -26,6 +26,7 @@ var (
 	flagMaxBackups = flag.Int64("max-backups", 50, "max number of backup log files")
 	flagMaxAge     = flag.String("max-age", "3m", "max live time of log file")
 	flagLevel      = flag.Int("level", xlog.INFO, "log level")
+	flagTag        = flag.String("tag", "", "log tag")
 	flagBlock      = flag.Int("block-size", 1024, "block size in every write op")
 	flagNumber     = flag.Int("number", 1000, "number of write op")
 	flagInterval   = flag.Duration("interval", 10*time.Millisecond, "the interval between two write ops")
@@ -40,7 +41,6 @@ func main() {
 		err  error
 		xcfg *xlog.XConfig
 		xl   *xlog.XLogger
-		it   = *flagInterval
 	)
 
 	xcfg = &xlog.XConfig{
@@ -48,6 +48,7 @@ func main() {
 		MaxSize:    *flagMaxSize,
 		MaxBackups: *flagMaxBackups,
 		MaxAge:     *flagMaxAge,
+		Tag:        *flagTag,
 		Level:      *flagLevel,
 	}
 
@@ -62,35 +63,47 @@ func main() {
 	for gid := 0; gid < *flagParallel; gid++ {
 		wg.Add(1)
 		go func() {
-			if *flagRaw {
-				var block = []byte(strings.Repeat("A", *flagBlock))
-				for i := 0; i < *flagNumber; i++ {
-					if _, err = xl.Write(block); err != nil {
-						fmt.Fprintf(os.Stderr, "%s\n", err)
-					}
-					time.Sleep(it)
-				}
-			} else {
-				var block = strings.Repeat("A", *flagBlock)
-				for i := 0; i < *flagNumber; i++ {
-					switch i % 5 {
-					case 0:
-						xl.Fatal("%s", block)
-					case 1:
-						xl.Error("%s", block)
-					case 2:
-						xl.Warn("%s", block)
-					case 3:
-						xl.Info("%s", block)
-					case 4:
-						xl.Debug("%s", block)
-					}
-					time.Sleep(it)
-				}
-			}
+			worker(xl)
 			wg.Done()
 		}()
 	}
 	wg.Wait()
 
+}
+
+func worker(xl *xlog.XLogger) {
+	var (
+		err error
+		it  = *flagInterval
+	)
+
+	if *flagRaw {
+		var block = []byte(strings.Repeat("A", *flagBlock))
+		for i := 0; i < *flagNumber; i++ {
+			if _, err = xl.Write(block); err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err)
+			}
+			time.Sleep(it)
+		}
+	} else {
+		var block = strings.Repeat("A", *flagBlock)
+		for i := 0; i < *flagNumber; i++ {
+			switch i % 5 {
+			case 0:
+				err = xl.Fatal("%s", block)
+			case 1:
+				err = xl.Error("%s", block)
+			case 2:
+				err = xl.Warn("%s", block)
+			case 3:
+				err = xl.Info("%s", block)
+			case 4:
+				err = xl.Debug("%s", block)
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err)
+			}
+			time.Sleep(it)
+		}
+	}
 }

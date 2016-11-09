@@ -633,7 +633,11 @@ func locationTag(level int, skip int) string {
 func isWritable(dir string) error {
 	tmp, err := ioutil.TempFile(dir, "xlog_test")
 	if err != nil {
-		return err
+		if os.IsPermission(err) {
+			return fmt.Errorf("Write %s directory permission denied", dir)
+		} else {
+			return err
+		}
 	}
 	os.Remove(tmp.Name())
 	return nil
