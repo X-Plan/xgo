@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-08
+// 修订日期: 2016-11-09
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
@@ -114,7 +114,7 @@ type XLogger struct {
 	// 写操作是阻塞的.
 	bc chan []byte
 
-	// 用来终止flush协程.
+	// 用于flush协程通知主调协程flush关闭完成.
 	exitChan chan int
 
 	// 用来从flush协程中获取错误
@@ -123,6 +123,9 @@ type XLogger struct {
 
 	// 文件指针.
 	f *file
+
+	// 标示是否为半关闭状态.
+	half int32
 }
 
 func New(xcfg *XConfig) (*XLogger, error) {
@@ -187,7 +190,7 @@ func New(xcfg *XConfig) (*XLogger, error) {
 	// 缓存的大小为128条消息.
 	xl.bc = make(chan []byte, 128)
 	xl.exitChan = make(chan int)
-	xl.errorChan = make(chan error, 1)
+	xl.errorChan = make(chan error, 8)
 
 	// 异步执行数据同步到文件中的任务.
 	go xl.flush()
@@ -206,6 +209,9 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 	}()
 
 	select {
+	case xl.bc <- b:
+		// 这样的返回是为了满足io.Writer接口.
+		n, err = len(b), nil
 	case err = <-xl.errorChan:
 		// 这里需要处理errorChan已经关闭
 		// 情形.
@@ -214,9 +220,6 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 		} else {
 			n, err = 0, err
 		}
-	case xl.bc <- b:
-		// 这样的返回是为了满足io.Writer接口.
-		n, err = len(b), nil
 	}
 
 	return
@@ -264,102 +267,107 @@ func (xl *XLogger) Close() (err error) {
 	// 写/关闭操作放在同一个协程可以保证
 	// 操作的正确性.
 	close(xl.bc)
-	close(xl.exitChan)
 
+	// 等待flush协程的关闭, 这里进行等待
+	// 的主要目的是防止flush未执行关闭操作
+	// 前进程已经退出, 这种情况下部分数据
+	// 未能写到持久化设备上, 但是这个步骤
+	// 只能保证flush执行完毕, 并不能保证
+	// 最后的数据一定能落地.
+	<-xl.exitChan
 	return
 }
 
 func (xl *XLogger) flush() {
-	// flush函数是以bc为优先的,
-	// 这样即便收到了退出信号也会
-	// 将残留的日志写入到磁盘.
-	for {
-		select {
-		case b := <-xl.bc:
-			// 处理bc已经关闭的情形, 当传入的
-			// 为nil则不做处理, 当然用户可以
-			// 手动写入nil, 但是这样的数据有
-			// 什么意义呢 :)
-			if b != nil {
-				xl.write(b)
-			}
+	var (
+		err error
+		b   []byte
+	)
 
-		case <-xl.exitChan:
-			// 先将bc中的残留数据进行处理.
-			for b := range xl.bc {
-				xl.write(b)
-			}
+	// 当主协程关闭bc的时候该循环也会终止.
+	for b = range xl.bc {
+		if err = xl.write(b); err != nil {
 
-			// 因为文件和errorChan的写
-			// 操作是在flush中执行, 所以
-			// 也应该在这里关闭.
-			if xl.f != nil {
-				xl.f.Close()
+			// 传递错误给主调协程.
+			// errorChan的缓冲区有限, 所以
+			// errorChan中的错误还没有被主协
+			// 程捕获之前又生成了新的错误,
+			// 这里的需要将老的错误排出, 然后
+			// 写入新的错误. 这里的写法并不多
+			// 余. 必须保证两个操作都是非阻塞的.
+			select {
+			case xl.errorChan <- err:
+			default:
+				select {
+				// 因为操作不是原子的, 所以在
+				// 判断没有空间和读取老数据之间
+				// 父协程可能将数据已经读取了.
+				case <-xl.errorChan:
+					xl.errorChan <- err
+				default:
+					// 无操作.
+				}
 			}
-			close(xl.errorChan)
-			return
-
 		}
 	}
+
+	// 将文件落地到持久化设备上.
+	// 这里不进行错误的捕获.
+	if xl.f != nil {
+		xl.f.Close()
+
+	}
+	close(xl.errorChan)
+	close(xl.exitChan)
+
+	return
+
 }
 
 // 这个write函数不同于Write函数, 它是将
 // 用于将数据写向文件的. XLogger会在打
 // 开就文件和创建新文件这两个操作之前进
 // 行清理操作.
-func (xl *XLogger) write(b []byte) {
+func (xl *XLogger) write(b []byte) error {
 	var err error
 	// 初始化XLogger.
 	if xl.f == nil {
-		// 先清理再打开.
-		if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
-			goto handle_error
+		if err = cleanup(xl.dir, xl.ma, xl.mb, xl.mb); err != nil {
+			return err
 		}
 
 		if xl.f, err = openFile(xl.dir); err != nil {
-			goto handle_error
+			return err
 		}
 	}
 
 	// 目录下的日志文件都不符合要求或
 	// 当前日志文件的大小超标.
 	if xl.f == nil || (xl.ms > 0 && xl.f.Size >= xl.ms) {
-		// 先清理再创建.
-		if err = cleanup(xl.dir, xl.ma, xl.mb); err != nil {
-			goto handle_error
+		// 在使用新的文件前必须要确保
+		// 老文件的数据已经落地. 这步
+		// 操作应该放置在cleanup操作
+		// 之前.
+		if xl.f != nil {
+			if err = xl.f.Close(); err != nil {
+				return err
+			}
+		}
+
+		// 因为之后会创建新的文件, 因此需要在这里
+		// 将文件数量的上限减少一个单位.
+		if err = cleanup(xl.dir, xl.ma, xl.mb, xl.mb-1); err != nil {
+			return err
 		}
 
 		if xl.f, err = createFile(xl.dir); err != nil {
-			goto handle_error
+			return err
 		}
+
 	}
 
 	_, err = xl.f.Write(b)
-
-	// 传递错误给主调协程.
-handle_error:
-	if err != nil {
-		// errorChan只有一个缓冲区, 所以
-		// errorChan中的错误还没有被主协
-		// 程捕获之前又生成了新的错误,
-		// 这里的需要将老的错误排出, 然后
-		// 写入新的错误. 这里的写法并不多
-		// 余. 这里必须保证两个操作都是非
-		// 阻塞的.
-		select {
-		case xl.errorChan <- err:
-		default:
-			select {
-			// 因为操作不是原子的, 所以在
-			// 判断没有空间和读取老数据之间
-			// 父协程可能将数据已经读取了.
-			case <-xl.errorChan:
-				xl.errorChan <- err
-			default:
-				return
-			}
-		}
-	}
+	return err
 }
 
 // 对输出进行包装. 附带一些标签信息.
@@ -438,7 +446,7 @@ func openFile(dir string) (*file, error) {
 }
 
 // 清除指定目录下的文件.
-func cleanup(dir string, ma time.Duration, mb int64) error {
+func cleanup(dir string, ma time.Duration, mb, amb int64) error {
 	var (
 		fiq *fileInfoQueue
 		err error
@@ -449,7 +457,7 @@ func cleanup(dir string, ma time.Duration, mb int64) error {
 	}
 
 	fiq.Sort()
-	fiq.CleanUp(dir, ma, mb)
+	fiq.CleanUp(dir, ma, mb, amb)
 
 	return nil
 }
@@ -536,7 +544,7 @@ func (fiq *fileInfoQueue) Append(fi fileInfo) {
 // 只有在队列处于排序状态下才可以使用该函数.
 // 该函数从保留个数和保留时间两个纬度来删除
 // 老文件.
-func (fiq *fileInfoQueue) CleanUp(dir string, maxAge time.Duration, maxBackups int64) {
+func (fiq *fileInfoQueue) CleanUp(dir string, ma time.Duration, mb, amb int64) {
 	var (
 		removes   []fileInfo
 		i         int64
@@ -544,12 +552,12 @@ func (fiq *fileInfoQueue) CleanUp(dir string, maxAge time.Duration, maxBackups i
 		threshold time.Time
 	)
 
-	if maxBackups > 0 && int64(fiq.Len()) > maxBackups {
-		i += int64(fiq.Len()) - maxBackups
+	if mb > 0 && int64(fiq.Len()) > mb {
+		i += int64(fiq.Len()) - amb
 	}
 
-	if maxAge > time.Duration(0) {
-		threshold = time.Now().Add((-1) * maxAge)
+	if ma > time.Duration(0) {
+		threshold = time.Now().Add((-1) * ma)
 		n = int64(fiq.Len())
 
 		for ; i < n; i++ {
