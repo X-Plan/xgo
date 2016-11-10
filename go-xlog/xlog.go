@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-09
+// 修订日期: 2016-11-10
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
@@ -21,11 +21,12 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	Version = "1.0.0"
+	Version = "1.1.0"
 )
 
 // 日志优先级, 数值越小, 优先级越高.
@@ -46,6 +47,12 @@ var levelTags = [...]string{
 	"[INFO]",
 	"[DEBUG]",
 }
+
+// 一个应用程序不应该将两个XLogger实体
+// 对应到同一个目录下, 这样会异常结果.
+// dirMap目的是为了防止这种现象发生.
+var dirMap = make(map[string]bool)
+var dirMtx = &sync.Mutex{}
 
 // 如果日志已经关闭还对其进行操作会抛出
 // 该错误.
@@ -128,16 +135,24 @@ type XLogger struct {
 	half int32
 }
 
-func New(xcfg *XConfig) (*XLogger, error) {
+func New(xcfg *XConfig) (xl *XLogger, err error) {
+
+	// 收尾工作, 比如解绑目录和xl
+	// 置为空.
+	defer func() {
+		if err != nil {
+			unbindDir(xl.dir)
+			xl = nil
+		}
+	}()
+
+	xl = &XLogger{}
+
 	// 参数校验
 	if xcfg == nil {
-		return nil, fmt.Errorf("XConfig is nil")
+		err = fmt.Errorf("XConfig is nil")
+		return
 	}
-
-	var (
-		xl  = &XLogger{}
-		err error
-	)
 
 	// 如果没有设置目录则默认使用当前目录.
 	if xcfg.Dir != "" {
@@ -145,31 +160,38 @@ func New(xcfg *XConfig) (*XLogger, error) {
 	} else {
 		xl.dir = "./log"
 	}
+
+	if err = bindDir(xl.dir); err != nil {
+		return
+	}
+
 	// 创建目录, 如果目录已经存在则该操作
 	// 会被忽略. 可以参考GoDoc中对MkdirAll
 	// 的描述.
 	if err = os.MkdirAll(xl.dir, 0777); err != nil {
-		return nil, err
+		return
 	}
 	// 检测用户是否对该目录具备写权限.
 	if err = isWritable(xl.dir); err != nil {
-		return nil, err
+		return
 	}
 
 	if xcfg.MaxSize < 0 {
-		return nil, fmt.Errorf("MaxSize is invalid")
+		err = fmt.Errorf("MaxSize is invalid")
+		return
 	}
 	xl.ms = xcfg.MaxSize
 
 	if xcfg.MaxBackups < 0 {
-		return nil, fmt.Errorf("MaxBackups is invalid")
+		err = fmt.Errorf("MaxBackups is invalid")
+		return
 	}
 	xl.mb = xcfg.MaxBackups
 
 	if xcfg.MaxAge != "" {
 		xl.ma, err = time.ParseDuration(xcfg.MaxAge)
 		if err != nil {
-			return nil, err
+			return
 		}
 	} else {
 		xl.ma = time.Duration(0)
@@ -184,7 +206,8 @@ func New(xcfg *XConfig) (*XLogger, error) {
 	if xcfg.Level >= FATAL && xcfg.Level <= DEBUG {
 		xl.level = xcfg.Level
 	} else {
-		return nil, fmt.Errorf("Level is invalid")
+		err = fmt.Errorf("Level is invalid")
+		return
 	}
 
 	// 缓存的大小为128条消息.
@@ -275,6 +298,10 @@ func (xl *XLogger) Close() (err error) {
 	// 只能保证flush执行完毕, 并不能保证
 	// 最后的数据一定能落地.
 	<-xl.exitChan
+
+	// 解除对目录的绑定.
+	unbindDir(xl.dir)
+
 	return
 }
 
@@ -641,4 +668,24 @@ func isWritable(dir string) error {
 	}
 	os.Remove(tmp.Name())
 	return nil
+}
+
+// 绑定目录.
+func bindDir(dir string) error {
+	dirMtx.Lock()
+	defer dirMtx.Unlock()
+
+	if _, ok := dirMap[dir]; !ok {
+		dirMap[dir] = true
+		return nil
+	} else {
+		return fmt.Errorf("%s directory has been occupied")
+	}
+}
+
+// 目录解绑.
+func unbindDir(dir string) {
+	dirMtx.Lock()
+	defer dirMtx.Unlock()
+	delete(dirMap, dir)
 }

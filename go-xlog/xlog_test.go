@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-11-08
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-09
+// 修订日期: 2016-11-10
 
 // go-xlog的测试文件.
 package xlog
@@ -73,6 +73,32 @@ func TestNew(t *testing.T) {
 	xassert.IsNil(t, xl.Close())
 	xassert.Equal(t, xl.Close(), ErrClosed)
 	xassert.IsNil(t, os.Remove("./log"))
+
+	xl, err = New(xcfg)
+	xassert.NotNil(t, xl)
+	xassert.IsNil(t, err)
+
+	// 测试目录的重复创建.
+	tmpxl, err := New(xcfg)
+	xassert.IsNil(t, tmpxl)
+	xassert.NotNil(t, err)
+
+	xl.Close()
+	xassert.IsNil(t, os.Remove("./log"))
+
+	tmpxl, err = New(xcfg)
+	xassert.NotNil(t, tmpxl)
+	xassert.IsNil(t, err)
+
+	xcfg.Dir = "./log2"
+	xl, err = New(xcfg)
+	xassert.NotNil(t, tmpxl)
+	xassert.IsNil(t, err)
+
+	xassert.IsNil(t, xl.Close())
+	xassert.IsNil(t, tmpxl.Close())
+	xassert.IsNil(t, os.Remove("./log"))
+	xassert.IsNil(t, os.Remove("./log2"))
 }
 
 // 测试写入函数的正确性, 测试方法采取
