@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	Version = "1.1.0"
+	Version = "1.1.1"
 )
 
 // 日志优先级, 数值越小, 优先级越高.
@@ -579,7 +579,7 @@ func (fiq *fileInfoQueue) CleanUp(dir string, ma time.Duration, mb, amb int64) {
 		threshold time.Time
 	)
 
-	if mb > 0 && int64(fiq.Len()) > mb {
+	if mb > 0 && int64(fiq.Len()) > amb {
 		i += int64(fiq.Len()) - amb
 	}
 
