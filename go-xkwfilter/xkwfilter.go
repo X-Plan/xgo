@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-11-23
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-26
+// 修订日期: 2016-11-27
 
 // go-xkwfilter基于Aho-Corasick算法实现了一个关键字过滤器.
 package xkwfilter
@@ -44,14 +44,12 @@ type XKeywordFilter struct {
 	// 失败回溯表.
 	fm []int
 
-	// 以字节为单位, 所有关键字和mask中最大
-	// 的长度.
-	maxlen int
+	// 记录状态在树中的深度.
+	dm []int
 }
 
 func New(mask string, keywords ...string) *XKeywordFilter {
 	xkwf := &XKeywordFilter{mask: []byte(mask)}
-	xkwf.maxlen = len(xkwf.mask)
 
 	// cm中的值为-1表示该字节不存在.
 	for i := 0; i < 256; i++ {
@@ -64,9 +62,6 @@ func New(mask string, keywords ...string) *XKeywordFilter {
 	)
 	for _, kw := range keywords {
 		a := []byte(kw)
-		if len(a) > xkwf.maxlen {
-			xkwf.maxlen = len(a)
-		}
 
 		for _, c := range a {
 			if xkwf.cm[int(c)] == -1 {
@@ -87,10 +82,10 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 	var (
 		c       byte
 		s, olds int
-		inc, nc int
+		i, inc  int
 		br      = bufio.NewReader(r)
 		bw      = bufio.NewWriter(w)
-		buf     = make([]byte, 0, xkwf.maxlen)
+		buf     = make([]byte, 0, 1024)
 
 		// flag标识是否已经写入了mask.  Filter函数
 		// 在进行关键字过滤的时候遵循最长匹配的原则.
@@ -115,8 +110,6 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 			continue
 
 		case s == 0:
-			flag = false
-
 			if olds == 0 {
 				if err = bw.WriteByte(c); err != nil {
 					return
@@ -128,16 +121,17 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 				}
 				n += inc
 				buf = buf[:0]
+				flag = false
 				goto again
 			}
 
 		case s > 0:
 			if olds >= 0 {
 				if xkwf.am[s] {
-					if !flag {
-						// 只有上次写入非mask的情况下才可以
-						// 选择是否写入mask.
-						if inc, err = bw.Write(xkwf.mask); err != nil {
+					i = len(buf) - xkwf.dm[s]
+					if i >= 0 && !flag {
+						buf = append(buf[:i], xkwf.mask...)
+						if inc, err = bw.Write(buf); err != nil {
 							return
 						}
 						n += inc
