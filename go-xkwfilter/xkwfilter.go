@@ -12,6 +12,7 @@ package xkwfilter
 
 import (
 	"bufio"
+	"container/list"
 	"io"
 )
 
@@ -69,7 +70,7 @@ func New(mask string, keywords ...string) *XKeywordFilter {
 		}
 	}
 
-	// 构造转移矩阵.
+	// 构造转移矩阵tm和状态接受表am.
 	for _, kw := range keywords {
 		xkwf.enter(kw)
 	}
@@ -79,6 +80,9 @@ func New(mask string, keywords ...string) *XKeywordFilter {
 			xkwf.tm[0][i] = 0
 		}
 	}
+
+	// 构造失效函数表fm和状态深度表dm.
+	xkwf.constructFm()
 
 	return xkwf
 }
@@ -231,4 +235,37 @@ func (xkwf *XKeywordFilter) setAm(s int) {
 		xkwf.am = append(xkwf.am, make([]bool, s+1-len(xkwf.am))...)
 	}
 	xkwf.am[s] = true
+}
+
+func (xkwf *XKeywordFilter) constructFm() {
+	var (
+		nc, s, r int
+		q        = list.New()
+	)
+
+	xkwf.fm = make([]int, len(xkwf.tm))
+	xkwf.dm = make([]int, len(xkwf.tm))
+
+	for _, s = range xkwf.tm[0] {
+		if s != 0 {
+			q.PushBack(s)
+			xkwf.fm[s] = 0
+			xkwf.dm[s] = 1
+		}
+	}
+
+	for q.Len() > 0 {
+		r = (q.Remove(q.Front())).(int)
+		for nc, s = range xkwf.tm[r] {
+			if s != -1 {
+				q.PushBack(s)
+				r = xkwf.fm[r]
+				for xkwf.tm[r][nc] != -1 {
+					r = xkwf.fm[r]
+				}
+				xkwf.fm[s] = xkwf.tm[r][nc]
+				xkwf.dm[s] = xkwf.dm[r] + 1
+			}
+		}
+	}
 }
