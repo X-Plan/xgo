@@ -32,6 +32,7 @@ type XKeywordFilter struct {
 	// 因此对关键字中真正出现的字节进行
 	// 编号.
 	cm [256]int
+	cl int
 
 	// 状态/输入转移表. 第一个纬度为当前状态,
 	// 第二个纬度为输入字节.
@@ -57,17 +58,25 @@ func New(mask string, keywords ...string) *XKeywordFilter {
 	}
 
 	// 初始化字节映射表.
-	var (
-		n = 0
-	)
 	for _, kw := range keywords {
 		a := []byte(kw)
 
 		for _, c := range a {
 			if xkwf.cm[int(c)] == -1 {
-				xkwf.cm[int(c)] = n
-				n++
+				xkwf.cm[int(c)] = xkwf.cl
+				xkwf.cl++
 			}
+		}
+	}
+
+	// 构造转移矩阵.
+	for _, kw := range keywords {
+		xkwf.enter(kw)
+	}
+
+	for i, s := range xkwf.tm[0] {
+		if s == -1 {
+			xkwf.tm[0][i] = 0
 		}
 	}
 
@@ -168,4 +177,58 @@ func (xkwf *XKeywordFilter) transfer(s int, nc int) int {
 	} else {
 		return xkwf.tm[s][nc]
 	}
+}
+
+func (xkwf *XKeywordFilter) enter(kw string) {
+	var (
+		ns, i, s int
+		a        = []byte(kw)
+	)
+
+	for i = 0; xkwf.getTm(s, a[i]) != -1; i++ {
+		s = xkwf.getTm(s, a[i])
+	}
+
+	for ns = len(xkwf.tm); i < len(a); i++ {
+		xkwf.setTm(s, a[i], ns)
+		s, ns = ns, ns+1
+	}
+
+	// 将最后的终止状态设置为接受状态.
+	xkwf.setAm(s)
+}
+
+// 对从tm中取值进行封装, 添加了分配资源的判断.
+// 该函数只用于构造tm的过程中使用.
+func (xkwf *XKeywordFilter) getTm(s int, c byte) int {
+	if s >= len(xkwf.tm) {
+		xkwf.newCodes()
+	}
+	return xkwf.tm[s][xkwf.cm[int(c)]]
+}
+
+// 对设置tm中的值进行封装, 添加了分配资源判断.
+// 该函数只用于构造tm的过程中.
+func (xkwf *XKeywordFilter) setTm(s int, c byte, ns int) {
+	if s >= len(xkwf.tm) {
+		xkwf.newCodes()
+	}
+	xkwf.tm[s][xkwf.cm[int(c)]] = ns
+}
+
+func (xkwf *XKeywordFilter) newCodes() {
+	codes := make([]int, xkwf.cl)
+	for i := 0; i < xkwf.cl; i++ {
+		codes[i] = -1
+	}
+	xkwf.tm = append(xkwf.tm, codes)
+}
+
+// 对设置am中的值进行封装, 添加了分配资源判断.
+// 该函数只用于构造am的过程中.
+func (xkwf *XKeywordFilter) setAm(s int) {
+	if s >= len(xkwf.am) {
+		xkwf.am = append(xkwf.am, make([]bool, s+1-len(xkwf.am))...)
+	}
+	xkwf.am[s] = true
 }
