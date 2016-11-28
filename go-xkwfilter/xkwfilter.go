@@ -140,9 +140,10 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 
 		case s > 0:
 			if olds >= 0 {
+				buf = append(buf, c)
 				if xkwf.am[s] {
 					i = len(buf) - xkwf.dm[s]
-					if i >= 0 && !flag {
+					if i > 0 || (i == 0 && !flag) {
 						buf = append(buf[:i], xkwf.mask...)
 						if inc, err = bw.Write(buf); err != nil {
 							return
@@ -151,8 +152,6 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 						flag = true
 					}
 					buf = buf[:0]
-				} else {
-					buf = append(buf, c)
 				}
 			} else {
 				goto again
@@ -177,7 +176,11 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 
 func (xkwf *XKeywordFilter) transfer(s int, nc int) int {
 	if nc == -1 {
-		return -1
+		if s == 0 {
+			return 0
+		} else {
+			return -1
+		}
 	} else {
 		return xkwf.tm[s][nc]
 	}
@@ -239,8 +242,8 @@ func (xkwf *XKeywordFilter) setAm(s int) {
 
 func (xkwf *XKeywordFilter) constructFm() {
 	var (
-		nc, s, r int
-		q        = list.New()
+		nc, s, r, d int
+		q           = list.New()
 	)
 
 	xkwf.fm = make([]int, len(xkwf.tm))
@@ -256,15 +259,18 @@ func (xkwf *XKeywordFilter) constructFm() {
 
 	for q.Len() > 0 {
 		r = (q.Remove(q.Front())).(int)
+		d = xkwf.dm[r]
 		for nc, s = range xkwf.tm[r] {
 			if s != -1 {
 				q.PushBack(s)
+
 				r = xkwf.fm[r]
 				for xkwf.tm[r][nc] == -1 {
 					r = xkwf.fm[r]
 				}
+
 				xkwf.fm[s] = xkwf.tm[r][nc]
-				xkwf.dm[s] = xkwf.dm[r] + 1
+				xkwf.dm[s] = d + 1
 			}
 		}
 	}
