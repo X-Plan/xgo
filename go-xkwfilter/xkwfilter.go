@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-11-23
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-27
+// 修订日期: 2016-11-28
 
 // go-xkwfilter基于Aho-Corasick算法实现了一个关键字过滤器.
 package xkwfilter
@@ -214,7 +214,7 @@ func (xkwf *XKeywordFilter) getTm(s int, c byte) int {
 // 对设置tm中的值进行封装, 添加了分配资源判断.
 // 该函数只用于构造tm的过程中.
 func (xkwf *XKeywordFilter) setTm(s int, c byte, ns int) {
-	if s >= len(xkwf.tm) {
+	if ns >= len(xkwf.tm) {
 		xkwf.newCodes()
 	}
 	xkwf.tm[s][xkwf.cm[int(c)]] = ns
@@ -260,7 +260,7 @@ func (xkwf *XKeywordFilter) constructFm() {
 			if s != -1 {
 				q.PushBack(s)
 				r = xkwf.fm[r]
-				for xkwf.tm[r][nc] != -1 {
+				for xkwf.tm[r][nc] == -1 {
 					r = xkwf.fm[r]
 				}
 				xkwf.fm[s] = xkwf.tm[r][nc]
