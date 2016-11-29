@@ -91,6 +91,8 @@ func New(mask string, keywords ...string) *XKeywordFilter {
 // 的屏蔽字符串. 当出现EOF条件或出现错误的情况下该函数
 // 才会返回. 一个成功的返回必须要求err为nil, 而不是err
 // 为EOF, 因为Filter默认情况下就是要求r到达EOF.
+// Filter在进行关键字过滤的时候遵循最长匹配原则. 同时,
+// 两个关键字交叠出现或者衔接出现都只会被替换成一个mask.
 func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) {
 	var (
 		c       byte
@@ -100,11 +102,6 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 		bw      = bufio.NewWriter(w)
 		buf     = make([]byte, 0, 1024)
 
-		// flag标识是否已经写入了mask.  Filter函数
-		// 在进行关键字过滤的时候遵循最长匹配的原则.
-		// 如果aab和aaab都是关键字的话, 会优先考虑
-		// aaab, 将其替换为mask. 如果多个关键字重叠
-		// 或者衔接在一起, 则会被替换为一个mask.
 		mi   int
 		flag bool
 	)

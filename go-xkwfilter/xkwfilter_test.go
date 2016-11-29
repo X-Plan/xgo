@@ -13,6 +13,7 @@ package xkwfilter
 import (
 	"bytes"
 	"github.com/X-Plan/xgo/go-xassert"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"strings"
@@ -69,12 +70,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-// 可以将一段文字中的内容分成两类:
-// 1. 不包含关键字的字符串P.
-// 2. 包含关键字的最小字符串C.
-// 其中C可以是单个关键字, 或者是多个关键字
-// 的闭包.
-// 该片段只用来测试程序的正确性.
+// 验证Filter函数的正确性.
 func TestFilter(t *testing.T) {
 	var (
 		xkwf = New(
@@ -124,4 +120,32 @@ func TestFilter(t *testing.T) {
 	n, err := xkwf.Filter(os.Stdout, buf)
 	xassert.Equal(t, n, 144)
 	xassert.IsNil(t, err)
+}
+
+func BenchmarkFilter(b *testing.B) {
+	var (
+		keywords = []string{
+			".....",
+			"^^^^^",
+			"#####",
+			"...##",
+			"^^..##",
+			"..^^#",
+			"#^^^^.",
+			"^^^..",
+		}
+		xkwf    = New("***", keywords...)
+		article string
+	)
+
+	for i := 0; i < 1000; i++ {
+		article += randString(100) + keywords[i%len(keywords)]
+	}
+	buf := bytes.NewBuffer([]byte(article))
+
+	b.StartTimer()
+	for i := 0; i < 100000; i++ {
+		xkwf.Filter(ioutil.Discard, buf)
+	}
+	b.StopTimer()
 }
