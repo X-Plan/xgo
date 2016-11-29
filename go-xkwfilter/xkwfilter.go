@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-11-23
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-28
+// 修订日期: 2016-11-29
 
 // go-xkwfilter基于Aho-Corasick算法实现了一个关键字过滤器.
 package xkwfilter
@@ -105,6 +105,7 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 		// 如果aab和aaab都是关键字的话, 会优先考虑
 		// aaab, 将其替换为mask. 如果多个关键字重叠
 		// 或者衔接在一起, 则会被替换为一个mask.
+		mi   int
 		flag bool
 	)
 
@@ -122,40 +123,40 @@ func (xkwf *XKeywordFilter) Filter(w io.Writer, r io.Reader) (n int, err error) 
 			s, olds = xkwf.fm[olds], -1
 			continue
 
-		case s == 0:
-			if olds == 0 {
-				if err = bw.WriteByte(c); err != nil {
-					return
-				}
-				n++
-			} else {
-				if inc, err = bw.Write(buf); err != nil {
-					return
-				}
-				n += inc
-				buf = buf[:0]
-				flag = false
-				goto again
+		case s == 0 && olds == 0:
+			if err = bw.WriteByte(c); err != nil {
+				return
 			}
-
-		case s > 0:
-			if olds >= 0 {
-				buf = append(buf, c)
-				if xkwf.am[s] {
-					i = len(buf) - xkwf.dm[s]
-					if i > 0 || (i == 0 && !flag) {
-						buf = append(buf[:i], xkwf.mask...)
-						if inc, err = bw.Write(buf); err != nil {
-							return
-						}
-						n += inc
-						flag = true
+			n++
+			flag = false
+		case s > 0 && olds >= 0:
+			buf = append(buf, c)
+			if xkwf.am[s] {
+				mi = len(buf)
+			}
+		case s >= 0 && olds == -1:
+			i = len(buf) - xkwf.dm[s]
+			if i >= mi {
+				if mi > 0 && !flag {
+					if inc, err = bw.Write(xkwf.mask); err != nil {
+						return
 					}
-					buf = buf[:0]
+					n += inc
+					flag = true
 				}
-			} else {
-				goto again
+				if inc, err = bw.Write(buf[mi:i]); err != nil {
+					return
+				}
+
+				if inc > 0 {
+					n += inc
+					flag = false
+				}
+
+				mi = 0
+				buf = buf[i:]
 			}
+			goto again
 		case s == -2:
 			// 该状态放在最后的位置, 因为执行该语句
 			// 的可能性很小. 只有初始调用时才会执行.
@@ -187,6 +188,10 @@ func (xkwf *XKeywordFilter) transfer(s int, nc int) int {
 }
 
 func (xkwf *XKeywordFilter) enter(kw string) {
+	if len(kw) == 0 {
+		return
+	}
+
 	var (
 		ns, i, s int
 		a        = []byte(kw)
