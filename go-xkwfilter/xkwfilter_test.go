@@ -12,7 +12,6 @@ package xkwfilter
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"math/rand"
 	"os"
@@ -86,9 +85,16 @@ func TestFilter(t *testing.T) {
 			"!!!",
 			"...!!",
 			"^^^...",
+			"你好",
+			"世界",
+			"你是谁",
+			"你叫什么名字",
 		)
 
 		article = strings.Join([]string{
+			"...",
+			"^^^...",
+			"...",
 			randString(20),
 			"...",
 			randString(20),
@@ -96,18 +102,26 @@ func TestFilter(t *testing.T) {
 			"!!!",
 			"...",
 			"^^^...",
-			"x...",
+			"...",
 			"!!",
+			"!!!",
+			"..",
 			randString(20),
 			"^^^",
 			"...!!",
 			"!",
 			randString(20),
+			"你是谁",
+			randString(20),
+			"世界",
+			"你叫什么名字",
+			"你你好",
+			randString(20),
 		}, "")
 	)
 
-	fmt.Println(article)
 	buf := bytes.NewBuffer([]byte(article))
-	_, err := xkwf.Filter(os.Stdout, buf)
+	n, err := xkwf.Filter(os.Stdout, buf)
+	xassert.Equal(t, n, 144)
 	xassert.IsNil(t, err)
 }
