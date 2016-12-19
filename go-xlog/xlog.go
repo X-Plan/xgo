@@ -5,13 +5,12 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-10
+// 修订日期: 2016-12-19
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -26,7 +25,7 @@ import (
 )
 
 const (
-	Version = "1.1.1"
+	Version = "1.2.0"
 )
 
 // 日志优先级, 数值越小, 优先级越高.
@@ -418,7 +417,6 @@ func (xl *XLogger) output(level int, m string) (err error) {
 // 对文件指针进行一层封装, 提供一个写
 // 缓存和大小的记录.
 type file struct {
-	*bufio.Writer
 	Fp   *os.File
 	Size int64
 }
@@ -435,7 +433,6 @@ func createFile(dir string) (*file, error) {
 		return nil, err
 	}
 
-	f.Writer = bufio.NewWriter(f.Fp)
 	f.Size = int64(0)
 
 	return f, nil
@@ -462,7 +459,6 @@ func openFile(dir string) (*file, error) {
 			return nil, err
 		}
 
-		f.Writer = bufio.NewWriter(f.Fp)
 		f.Size = fi.Size
 
 		return f, nil
@@ -490,15 +486,12 @@ func cleanup(dir string, ma time.Duration, mb, amb int64) error {
 }
 
 func (f *file) Write(b []byte) (int, error) {
-	n, err := f.Writer.Write(b)
+	n, err := f.Fp.Write(b)
 	f.Size += int64(n)
 	return n, err
 }
 
 func (f *file) Close() error {
-	if err := f.Writer.Flush(); err != nil {
-		return err
-	}
 	return f.Fp.Close()
 }
 
