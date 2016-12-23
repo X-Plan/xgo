@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	Version = "1.2.0"
+	Version = "1.2.1"
 )
 
 // 该接口的目的是为了统一
@@ -60,7 +60,12 @@ func NotEqual(xt XT, exp, act interface{}, args ...interface{}) {
 func IsNil(xt XT, act interface{}, args ...interface{}) {
 	result := isNil(act)
 	assert(xt, result, func() {
-		str := fmt.Sprintf("%#v is not nil", act)
+		var str string
+		if _, ok := act.(error); ok {
+			str = fmt.Sprintf("error (%s) is not nil", act)
+		} else {
+			str = fmt.Sprintf("%#v is not nil", act)
+		}
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}
@@ -72,7 +77,7 @@ func IsNil(xt XT, act interface{}, args ...interface{}) {
 func NotNil(xt XT, act interface{}, args ...interface{}) {
 	result := !isNil(act)
 	assert(xt, result, func() {
-		str := fmt.Sprintf("%#v is nil", act)
+		str := fmt.Sprintf("actual value is nil")
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}

@@ -64,6 +64,7 @@ func TestIsNil(t *testing.T) {
 	IsNil(t, nilMap, "nilMap")
 	IsNil(t, nilPtr, "nilPtr")
 	IsNil(t, nilSlice, "nilSlice")
+	// 	IsNil(t, errors.New("Hello, Boy!"))
 }
 
 func TestNotNil(t *testing.T) {
@@ -74,9 +75,10 @@ func TestNotNil(t *testing.T) {
 		notNilMap       map[int]int = make(map[int]int)
 		notPtr          *int        = new(int)
 		notSlice        []int       = make([]int, 0)
+		// 		intNil          *int
 	)
 
-	//  NotNil(t, nil)
+	// 	NotNil(t, nil)
 	NotNil(t, exp, "notNil")
 	NotNil(t, notNilChan, "notNilChan")
 	NotNil(t, notNilFunc, "notNilFunc")
@@ -84,6 +86,7 @@ func TestNotNil(t *testing.T) {
 	NotNil(t, notNilMap, "notNilMap")
 	NotNil(t, notPtr, "notPtr")
 	NotNil(t, notSlice, "notSlice")
+	// 	NotNil(t, intNil)
 }
 
 type foo struct {

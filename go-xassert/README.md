@@ -1,7 +1,7 @@
 #go-xassert
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)
 
 **go-xassert**实现了一个方便测试的断言包.
 
