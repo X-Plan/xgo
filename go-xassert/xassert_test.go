@@ -5,11 +5,12 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-14
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-18
+// 修订日期: 2016-12-23
 
 package xassert
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -115,4 +116,9 @@ func TestFoo(t *testing.T) {
 	NotNil(t, b)
 	NotEqual(t, a, b)
 	// Equal(t, a, b)
+}
+
+func TestMatch(t *testing.T) {
+	Match(t, errors.New("Hello World"), `[Hh]ello\s+[Ww]orld`)
+	NotMatch(t, errors.New("Are You OK?"), `You\s{2}`)
 }

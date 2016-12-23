@@ -5,7 +5,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-14
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-22
+// 修订日期: 2016-12-23
 
 // go-xassert是一个方便测试使用的断言包.
 package xassert
@@ -14,11 +14,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 )
 
 var (
-	Version = "1.1.0"
+	Version = "1.2.0"
 )
 
 // 该接口的目的是为了统一
@@ -72,6 +73,30 @@ func NotNil(xt XT, act interface{}, args ...interface{}) {
 	result := !isNil(act)
 	assert(xt, result, func() {
 		str := fmt.Sprintf("%#v is nil", act)
+		if len(args) > 0 {
+			str += " - " + fmt.Sprint(args...)
+		}
+		xt.Error(str)
+	}, 1)
+}
+
+// 正则表达式匹配. 用act的字符串格式和正则
+// 表达式匹配.
+func Match(xt XT, act interface{}, pattern string, args ...interface{}) {
+	result := regexp.MustCompile(pattern).MatchString(fmt.Sprintf("%s", act))
+	assert(xt, result, func() {
+		str := fmt.Sprintf("(%s) not match (%s)", act, pattern)
+		if len(args) > 0 {
+			str += " - " + fmt.Sprint(args...)
+		}
+		xt.Error(str)
+	}, 1)
+}
+
+func NotMatch(xt XT, act interface{}, pattern string, args ...interface{}) {
+	result := !regexp.MustCompile(pattern).MatchString(fmt.Sprintf("%s", act))
+	assert(xt, result, func() {
+		str := fmt.Sprintf("(%s) match (%s)", act, pattern)
 		if len(args) > 0 {
 			str += " - " + fmt.Sprint(args...)
 		}

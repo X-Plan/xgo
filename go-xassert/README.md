@@ -1,7 +1,7 @@
 #go-xassert
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 
 **go-xassert**实现了一个方便测试的断言包.
 
@@ -39,6 +39,10 @@ func Test(t *testing.T) {
     xassert.NotNil(t, b)        // 成功
     xassert.NotEqual(t, a, b)   // 成功
     xassert.Equal(t, a, b)      // 失败
+
+    // 正则匹配.
+	xassert.Match(t, errors.New("Hello World"), `[Hh]ello\s+[Ww]orld`)
+	xassert.NotMatch(t, errors.New("Are You OK?"), `You\s{2}`)
 }
 
 ```
