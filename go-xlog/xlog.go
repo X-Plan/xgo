@@ -1,11 +1,9 @@
 // xlog.go
 //
-//		Copyright (C), blinklv. All rights reserved.
-//
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-19
+// 修订日期: 2016-12-31
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog

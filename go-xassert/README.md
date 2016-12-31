@@ -2,6 +2,7 @@
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
 ![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **go-xassert**实现了一个方便测试的断言包.
 

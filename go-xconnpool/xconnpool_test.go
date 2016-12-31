@@ -1,11 +1,9 @@
 // xconnpool_test.go
 //
-//		Copyright (C), blinklv. All rights reserved.
-//
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-15
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-18
+// 修订日期: 2016-12-31
 package xconnpool
 
 import (

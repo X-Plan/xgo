@@ -2,6 +2,7 @@
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **go-xkwfilter**是一个关键字过滤器, 它将输入字节流中的关键字替换  
 为**mask**(屏蔽字节流). 该过滤器的实现基于[Aho-Corasick][ac-wiki]算法.

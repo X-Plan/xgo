@@ -1,11 +1,9 @@
 // xkwfilter.go
 //
-//      Copyright (C), blinklv. All rights reserved.
-//
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-11-23
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-11-29
+// 修订日期: 2016-12-31
 
 // go-xkwfilter基于Aho-Corasick算法实现了一个关键字过滤器.
 package xkwfilter

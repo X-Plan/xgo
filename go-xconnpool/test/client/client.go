@@ -1,11 +1,9 @@
 // client.go
 //
-//		Copyright (C), blinklv. All rights reserved.
-//
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-13
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-10-18
+// 修订日期: 2016-12-31
 
 // 该程序用于测试go-xconnpool包. 它是这个测试
 // 过程中的客户端, 用来向服务端发送请求. 每个
