@@ -1,11 +1,9 @@
 // xhttp2.go
 //
-//      Copyright (C), blinklv. All rights reserved.
-//
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-12-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-13
+// 修订日期: 2016-12-31
 
 // go-xhttp2是net/http的一个扩展包, 提供了HTTP/1.1通过
 // Upgrade的方式升级到HTTP/2的支持.
