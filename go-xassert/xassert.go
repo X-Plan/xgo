@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-14
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// 修订日期: 2017-01-03
 
 // go-xassert是一个方便测试使用的断言包.
 package xassert
@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	Version = "1.2.1"
+	Version = "1.2.2"
 )
 
 // 该接口的目的是为了统一
@@ -28,6 +28,16 @@ type XT interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	FailNow()
+}
+
+// 断言条件为真.
+func IsTrue(xt XT, result bool) {
+	assert(xt, result, func() { xt.Error("result is not true") }, 1)
+}
+
+// 断言条件为假.
+func IsFalse(xt XT, result bool) {
+	assert(xt, !result, func() { xt.Error("result is not false") }, 1)
 }
 
 // 断言实际值等于期望值.

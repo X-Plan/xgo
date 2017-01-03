@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-14
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// 修订日期: 2017-01-03
 
 package xassert
 
@@ -34,6 +34,14 @@ var (
 		field4: []int{2, 3, 4},
 	}
 )
+
+func TestIsTrue(t *testing.T) {
+	IsTrue(t, true)
+}
+
+func TestIsFalse(t *testing.T) {
+	IsFalse(t, false)
+}
 
 func TestEqual(t *testing.T) {
 	Equal(t, exp, exp, "msg")
