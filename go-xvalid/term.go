@@ -3,12 +3,13 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-07
+// 修订日期: 2017-01-08
 package xvalid
 
 import (
 	"fmt"
 	rft "reflect"
+	"time"
 )
 
 const (
@@ -37,6 +38,27 @@ type term struct {
 	check func(rft.Value) error
 }
 
+func newTerm(name, k, v string) term {
+	t = term{name: name}
+	switch k {
+	case "noempty":
+		if !isspace(v) {
+			t.panic("invalid term 'noempty=%s'", v)
+		}
+		t.t, t.check = tnoempty, t.noempty
+	case "min":
+		t.t, t.check, t.v = tmin, t.template(t.less), getValue(t.t, v, name)
+	case "max":
+		t.t, t.check, t.v = tmax, t.template(t.greater), getValue(t.t, v, name)
+	case "default":
+		t.t, t.check, t.v = tmax, t.template(t.set), getValue(t.t, v, name)
+	case "match":
+		t.t, t.check, t.v = tmatch, t.match, regexp.MustCompile(v)
+	default:
+	}
+	return t
+}
+
 func (t term) noempty(v rft.Value) error {
 	// 非空不能作用于bool类型, 因为这样产生的语
 	// 义会使结果恒为真. 这样的选项没有任何意义.
@@ -59,24 +81,92 @@ func (t term) match(v rft.Value) error {
 	return nil
 }
 
-func (t term) template(v rft.Value, bop func(x, y rft.Value) bool) func(v rft.Value) error {
+func (t term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Value) error {
 	return func(v rft.Value) error {
-		var err error
+		var (
+			err error
+			ok  bool
+			tv  interface{}
+		)
+
 		switch v.Kind() {
 		case rft.Uint, rft.Uint8, rft.Uint16, rft.Uint32, rft.Uint64:
+			ok = bop(v, t.v)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
+			switch t.Value.(type) {
+			case uint64:
+				tv = int64(t.v.(uint64))
+			case time.Duration:
+				tv = int64(t.v.(time.Duration))
+			}
+			ok = bop(v, tv)
 		case rft.Float32, rft.Float64:
-		case rft.String:
+			switch t.Value.(type) {
+			case uint64:
+				tv = float64(t.v.(uint64))
+			case int64:
+				tv = float64(t.v.(int64))
+			}
+			ok = bop(v, tv)
+		case rft.Bool, rft.String:
 			if t.t == tdefault {
-				bop(v, t.v)
+				ok = bop(v, t.v)
 				break
 			}
 			fallthrough
 		default:
 			t.panic("%v type can't support '%s' term", v.Kind(), t.t)
 		}
-		return err
-	}(v)
+
+		if !ok {
+			return t.errorf("can't satisfy term '%s=%v'", t.t, t.v)
+		}
+		return nil
+	}
+}
+
+func (t term) less(x rft.Value, y interface{}) bool {
+	var ok bool
+	switch y.(type) {
+	case uint64:
+		ok = (x.Uint() < y.(uint64))
+	case int64:
+		ok = (x.Int() < y.(int64))
+	case float64:
+		ok = (x.Float() < y.(float64))
+	}
+	return ok
+}
+
+func (t term) greater(x rft.Value, y interface{}) bool {
+	var ok bool
+	switch y.(type) {
+	case uint64:
+		ok = (x.Uint() > y.(uint64))
+	case int64:
+		ok = (x.Int() > y.(int64))
+	case float64:
+		ok = (x.Float() > y.(float64))
+	}
+	return ok
+}
+
+func (t term) set(x rft.Value, y interface{}) bool {
+	if iszero(x) {
+		switch y.(type) {
+		case bool:
+			x.SetBool(y.(bool))
+		case uint64:
+			x.SetInt(y.(int64))
+		case int64:
+			x.SetUint(y.(uint64))
+		case float64:
+			x.SetFloat(y.(float64))
+		case string:
+			x.SetString(y.(string))
+		}
+	}
+	return true
 }
 
 func (t term) iszero(v rft.Value) bool {
@@ -109,4 +199,30 @@ func (t term) panic(format string, args ...interface{}) {
 
 func (t term) errorf(format string, args ...interface{}) error {
 	return fmt.Errorf("%s: "+format, t.name, args...)
+}
+
+func isspace(s string) bool {
+	return regexp.MustCompile(`\s*`).MatchString(s)
+}
+
+func setTerm(t *term, v string) {
+	var err error
+}
+
+func getValue(t termtype, v string, name string) interface{} {
+	if b, err := strconv.ParseBool(v); err == nil {
+		return b
+	} else if ui, err := strconv.ParseUint(v, 10, 64); err == nil {
+		return ui
+	} else if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+		return i
+	} else if f, err := strconv.ParseFloat(v, 64); err == nil {
+		return f
+	} else if d, err := time.ParseDuration(v); err == nil {
+		return d
+	} else if t == tdefault {
+		return v
+	}
+	panic(fmt.Sprintf("%s: invalid term '%s=%s'", name, t, v))
+	return nil
 }
