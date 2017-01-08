@@ -11,7 +11,26 @@ import (
 	"github.com/X-Plan/xgo/go-xassert"
 	rft "reflect"
 	"testing"
+	"time"
 )
+
+func TestNewTerm(t *testing.T) {
+	xassert.IsNil(t, cpanic(func() { newTerm("test", "noempty", "") }))
+	xassert.IsNil(t, cpanic(func() { newTerm("test", "noempty", "\n\t \t\n\r\v") }))
+	xassert.Match(t, cpanic(func() { newTerm("test", "noempty", "hello") }), `invalid term 'noempty=.*'`)
+	xassert.Match(t, cpanic(func() { newTerm("test", "min", "true") }), `invalid term 'min=true'`)
+	xassert.Match(t, cpanic(func() { newTerm("test", "max", "FALSE") }), `invalid term 'max=FALSE'`)
+	xassert.IsNil(t, cpanic(func() { newTerm("test", "default", "True") }))
+	_ = newTerm("test", "min", "10").v.(uint64)
+	_ = newTerm("test", "max", "-10").v.(int64)
+	_ = newTerm("test", "min", "-12.33").v.(float64)
+	_ = newTerm("test", "default", "1").v.(uint64)
+	_ = newTerm("test", "default", "0").v.(uint64)
+	_ = newTerm("test", "min", "10h").v.(time.Duration)
+	xassert.Match(t, cpanic(func() { newTerm("test", "min", "hello world") }), `invalid term 'min=hello world'`)
+	xassert.Match(t, cpanic(func() { newTerm("test", "max", "[1,2,3]") }), `invalid term 'max=\[1,2,3\]'`)
+	_ = newTerm("test", "default", `{ "a": 1, "b": "hello" }`).v.(string)
+}
 
 type dummyUint struct {
 	A uint

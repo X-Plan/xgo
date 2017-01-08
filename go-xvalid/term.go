@@ -68,11 +68,11 @@ func newTerm(name, k, v string) term {
 		}
 		tm.t, tm.check = tnoempty, tm.noempty
 	case "min":
-		tm.t, tm.check, tm.v = tmin, tm.template(tm.less), getValue(tm.t, v, name)
+		tm.t, tm.check, tm.v = tmin, tm.template(tm.less), getValue(tmin, v, name)
 	case "max":
-		tm.t, tm.check, tm.v = tmax, tm.template(tm.greater), getValue(tm.t, v, name)
+		tm.t, tm.check, tm.v = tmax, tm.template(tm.greater), getValue(tmax, v, name)
 	case "default":
-		tm.t, tm.check, tm.v = tmax, tm.template(tm.set), getValue(tm.t, v, name)
+		tm.t, tm.check, tm.v = tmax, tm.template(tm.set), getValue(tdefault, v, name)
 	case "match":
 		tm.t, tm.check, tm.v = tmatch, tm.match, regexp.MustCompile(v)
 	default:
@@ -224,11 +224,21 @@ func (tm term) errorf(format string, args ...interface{}) error {
 }
 
 func isspace(s string) bool {
-	return regexp.MustCompile(`\s*`).MatchString(s)
+	return regexp.MustCompile(`^[[:space:]]*$`).MatchString(s)
+}
+
+func isbool(s string) bool {
+	return regexp.MustCompile(`^(true|True|TRUE|false|False|FALSE)$`).MatchString(s)
 }
 
 func getValue(t termtype, v string, name string) interface{} {
-	if b, err := strconv.ParseBool(v); err == nil {
+	// 标准库https://golang.org/pkg/strconv/#ParseBool
+	// 会对0,1进行解释, 这不将这两者看作是bool类型.
+	if isbool(v) {
+		if t != tdefault {
+			goto panic_exit
+		}
+		b, _ := strconv.ParseBool(v)
 		return b
 	} else if ui, err := strconv.ParseUint(v, 10, 64); err == nil {
 		return ui
@@ -241,6 +251,8 @@ func getValue(t termtype, v string, name string) interface{} {
 	} else if t == tdefault {
 		return v
 	}
+
+panic_exit:
 	panic(fmt.Sprintf("%s: invalid term '%s=%s'", name, t, v))
 	return nil
 }
