@@ -9,6 +9,9 @@ package xvalid
 import (
 	"fmt"
 	rft "reflect"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -38,8 +41,26 @@ type term struct {
 	check func(rft.Value) error
 }
 
+func newTerms(name, tag string) []term {
+	var (
+		terms []term
+		ts    = strings.Split(tag, ",")
+		m     = make(map[string]string)
+	)
+
+	for _, t := range ts {
+		kv := strings.SplitN(t, "=", 2)
+		if _, ok := m[kv[0]]; ok {
+			panic(fmt.Sprintf("%s: duplicate term '%s'", name, kv[0]))
+		}
+		m[kv[0]] = kv[1]
+		terms = append(terms, newTerm(name, kv[0], kv[1]))
+	}
+	return terms
+}
+
 func newTerm(name, k, v string) term {
-	t = term{name: name}
+	t := term{name: name}
 	switch k {
 	case "noempty":
 		if !isspace(v) {
@@ -75,7 +96,7 @@ func (t term) match(v rft.Value) error {
 	if v.Kind() != rft.String {
 		t.panic("%v type can't support 'match' term", v.Kind())
 	}
-	if re := t.v.(*regexp.Regexp); re.MathString(v.String()) {
+	if re := t.v.(*regexp.Regexp); re.MatchString(v.String()) {
 		return t.errorf("'%s' not match 'match=%s' term", v.String(), re)
 	}
 	return nil
@@ -84,16 +105,15 @@ func (t term) match(v rft.Value) error {
 func (t term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Value) error {
 	return func(v rft.Value) error {
 		var (
-			err error
-			ok  bool
-			tv  interface{}
+			ok bool
+			tv interface{}
 		)
 
 		switch v.Kind() {
 		case rft.Uint, rft.Uint8, rft.Uint16, rft.Uint32, rft.Uint64:
 			ok = bop(v, t.v)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
-			switch t.Value.(type) {
+			switch t.v.(type) {
 			case uint64:
 				tv = int64(t.v.(uint64))
 			case time.Duration:
@@ -101,7 +121,7 @@ func (t term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Val
 			}
 			ok = bop(v, tv)
 		case rft.Float32, rft.Float64:
-			switch t.Value.(type) {
+			switch t.v.(type) {
 			case uint64:
 				tv = float64(t.v.(uint64))
 			case int64:
@@ -152,7 +172,7 @@ func (t term) greater(x rft.Value, y interface{}) bool {
 }
 
 func (t term) set(x rft.Value, y interface{}) bool {
-	if iszero(x) {
+	if t.iszero(x) {
 		switch y.(type) {
 		case bool:
 			x.SetBool(y.(bool))
@@ -194,19 +214,15 @@ func (t term) iszero(v rft.Value) bool {
 }
 
 func (t term) panic(format string, args ...interface{}) {
-	panic(fmt.Sprintf("%s: "+format, t.name, args...))
+	panic(fmt.Sprintf(t.name+": "+format, args...))
 }
 
 func (t term) errorf(format string, args ...interface{}) error {
-	return fmt.Errorf("%s: "+format, t.name, args...)
+	return fmt.Errorf(t.name+": "+format, args...)
 }
 
 func isspace(s string) bool {
 	return regexp.MustCompile(`\s*`).MatchString(s)
-}
-
-func setTerm(t *term, v string) {
-	var err error
 }
 
 func getValue(t termtype, v string, name string) interface{} {
