@@ -71,10 +71,13 @@ again:
 		// 因此需要先创建一个可寻址的entity, 对其进行完操作
 		// 后替换原有的entity.
 		for _, key := range xv.MapKeys() {
-			v := xv.MapIndex(key)
+			org := xv.MapIndex(key)
+			v := rft.New(org.Type()).Elem()
+			v.Set(org)
 			if err = validate(v.Addr().Interface()); err != nil {
 				break
 			}
+			xv.SetMapIndex(key, v)
 		}
 	}
 	return
@@ -88,11 +91,11 @@ func validateStruct(x interface{}) (err error) {
 
 	for i := 0; i < n; i++ {
 		var (
-			fv, sf         = xv.Field(i), xt.Field(i)
-			ft, kind, name = fv.Type(), fv.Kind(), sf.Name
+			fv, sf     = xv.Field(i), xt.Field(i)
+			kind, name = fv.Kind(), sf.Name
 		)
 
-		if tag, ok := sf.Tag.Lookup("xvalid"); ok {
+		if tag, ok := sf.Tag.Lookup("xvalid"); ok && fv.CanSet() {
 			// 即便是xvalid tag的值为空, 但是只要设置了该tag.
 			// 当类型不匹配的时候依然会导致程序panic.
 			if !support[int(kind)] {
@@ -107,13 +110,15 @@ func validateStruct(x interface{}) (err error) {
 			}
 
 			switch kind {
-			case rft.Struct, rft.Map, rft.Slice, rft.Array:
-				if err = validate(fv.Addr().Interface()); err != nil {
-					return
-				}
+			case rft.Struct:
+				err = validateStruct(fv.Addr().Interface())
+			case rft.Ptr, rft.Interface, rft.Slice, rft.Array, rft.Map:
+				err = validate(fv.Interface())
 			}
 		}
 	}
+
+	return
 }
 
 func validateFlagSet(fs *flag.FlagSet) error {
