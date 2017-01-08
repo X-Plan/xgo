@@ -63,10 +63,10 @@ func validateStruct(x interface{}) error {
 			if !support[int(xv.Kind())] {
 				panic(fmt.Sprintf("%s: %v type can't support 'xvalid' tag", sf.Name, xv.Kind()))
 			}
-			terms := newTerms(sf.Name, tag)
+			tms := newTerms(sf.Name, tag)
 
-			for _, t := range terms {
-				if err = t.check(fv); err != nil {
+			for _, tm := range tms {
+				if err = tm.check(fv); err != nil {
 					return err
 				}
 			}

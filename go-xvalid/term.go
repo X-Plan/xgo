@@ -43,9 +43,9 @@ type term struct {
 
 func newTerms(name, tag string) []term {
 	var (
-		terms []term
-		ts    = strings.Split(tag, ",")
-		m     = make(map[string]string)
+		tms []term
+		ts  = strings.Split(tag, ",")
+		m   = make(map[string]string)
 	)
 
 	for _, t := range ts {
@@ -54,55 +54,55 @@ func newTerms(name, tag string) []term {
 			panic(fmt.Sprintf("%s: duplicate term '%s'", name, kv[0]))
 		}
 		m[kv[0]] = kv[1]
-		terms = append(terms, newTerm(name, kv[0], kv[1]))
+		tms = append(tms, newTerm(name, kv[0], kv[1]))
 	}
-	return terms
+	return tms
 }
 
 func newTerm(name, k, v string) term {
-	t := term{name: name}
+	tm := term{name: name}
 	switch k {
 	case "noempty":
 		if !isspace(v) {
-			t.panic("invalid term 'noempty=%s'", v)
+			tm.panic("invalid term 'noempty=%s'", v)
 		}
-		t.t, t.check = tnoempty, t.noempty
+		tm.t, tm.check = tnoempty, tm.noempty
 	case "min":
-		t.t, t.check, t.v = tmin, t.template(t.less), getValue(t.t, v, name)
+		tm.t, tm.check, tm.v = tmin, tm.template(tm.less), getValue(tm.t, v, name)
 	case "max":
-		t.t, t.check, t.v = tmax, t.template(t.greater), getValue(t.t, v, name)
+		tm.t, tm.check, tm.v = tmax, tm.template(tm.greater), getValue(tm.t, v, name)
 	case "default":
-		t.t, t.check, t.v = tmax, t.template(t.set), getValue(t.t, v, name)
+		tm.t, tm.check, tm.v = tmax, tm.template(tm.set), getValue(tm.t, v, name)
 	case "match":
-		t.t, t.check, t.v = tmatch, t.match, regexp.MustCompile(v)
+		tm.t, tm.check, tm.v = tmatch, tm.match, regexp.MustCompile(v)
 	default:
 	}
-	return t
+	return tm
 }
 
-func (t term) noempty(v rft.Value) error {
+func (tm term) noempty(v rft.Value) error {
 	// 非空不能作用于bool类型, 因为这样产生的语
 	// 义会使结果恒为真. 这样的选项没有任何意义.
 	if v.Kind() == rft.Bool {
-		t.panic("bool type can't support 'noempty' term")
+		tm.panic("bool type can'tm support 'noempty' term")
 	}
-	if t.iszero(v) {
-		return t.errorf("is empty")
+	if tm.iszero(v) {
+		return tm.errorf("is empty")
 	}
 	return nil
 }
 
-func (t term) match(v rft.Value) error {
+func (tm term) match(v rft.Value) error {
 	if v.Kind() != rft.String {
-		t.panic("%v type can't support 'match' term", v.Kind())
+		tm.panic("%v type can't support 'match' term", v.Kind())
 	}
-	if re := t.v.(*regexp.Regexp); re.MatchString(v.String()) {
-		return t.errorf("'%s' not match 'match=%s' term", v.String(), re)
+	if re := tm.v.(*regexp.Regexp); re.MatchString(v.String()) {
+		return tm.errorf("'%s' not match 'match=%s' term", v.String(), re)
 	}
 	return nil
 }
 
-func (t term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Value) error {
+func (tm term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Value) error {
 	return func(v rft.Value) error {
 		var (
 			ok bool
@@ -111,41 +111,41 @@ func (t term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Val
 
 		switch v.Kind() {
 		case rft.Uint, rft.Uint8, rft.Uint16, rft.Uint32, rft.Uint64:
-			ok = bop(v, t.v)
+			ok = bop(v, tm.v)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
-			switch t.v.(type) {
+			switch tm.v.(type) {
 			case uint64:
-				tv = int64(t.v.(uint64))
+				tv = int64(tm.v.(uint64))
 			case time.Duration:
-				tv = int64(t.v.(time.Duration))
+				tv = int64(tm.v.(time.Duration))
 			}
 			ok = bop(v, tv)
 		case rft.Float32, rft.Float64:
-			switch t.v.(type) {
+			switch tm.v.(type) {
 			case uint64:
-				tv = float64(t.v.(uint64))
+				tv = float64(tm.v.(uint64))
 			case int64:
-				tv = float64(t.v.(int64))
+				tv = float64(tm.v.(int64))
 			}
 			ok = bop(v, tv)
 		case rft.Bool, rft.String:
-			if t.t == tdefault {
-				ok = bop(v, t.v)
+			if tm.t == tdefault {
+				ok = bop(v, tm.v)
 				break
 			}
 			fallthrough
 		default:
-			t.panic("%v type can't support '%s' term", v.Kind(), t.t)
+			tm.panic("%v type can't support '%s' term", v.Kind(), tm.t)
 		}
 
 		if !ok {
-			return t.errorf("can't satisfy term '%s=%v'", t.t, t.v)
+			return tm.errorf("can't satisfy term '%s=%v'", tm.t, tm.v)
 		}
 		return nil
 	}
 }
 
-func (t term) less(x rft.Value, y interface{}) bool {
+func (tm term) less(x rft.Value, y interface{}) bool {
 	var ok bool
 	switch y.(type) {
 	case uint64:
@@ -158,7 +158,7 @@ func (t term) less(x rft.Value, y interface{}) bool {
 	return ok
 }
 
-func (t term) greater(x rft.Value, y interface{}) bool {
+func (tm term) greater(x rft.Value, y interface{}) bool {
 	var ok bool
 	switch y.(type) {
 	case uint64:
@@ -171,8 +171,8 @@ func (t term) greater(x rft.Value, y interface{}) bool {
 	return ok
 }
 
-func (t term) set(x rft.Value, y interface{}) bool {
-	if t.iszero(x) {
+func (tm term) set(x rft.Value, y interface{}) bool {
+	if tm.iszero(x) {
 		switch y.(type) {
 		case bool:
 			x.SetBool(y.(bool))
@@ -189,7 +189,7 @@ func (t term) set(x rft.Value, y interface{}) bool {
 	return true
 }
 
-func (t term) iszero(v rft.Value) bool {
+func (tm term) iszero(v rft.Value) bool {
 	var (
 		z = true
 	)
@@ -201,26 +201,26 @@ func (t term) iszero(v rft.Value) bool {
 		return v.IsNil()
 	case rft.Array:
 		for i := 0; i < v.Len(); i++ {
-			z = z && t.iszero(v.Field(i))
+			z = z && tm.iszero(v.Index(i))
 		}
 	case rft.Struct:
 		for i := 0; i < v.NumField(); i++ {
-			z = z && t.iszero(v.Field(i))
+			z = z && tm.iszero(v.Field(i))
 		}
 	default:
 		// bool, int, uint, float, string
-		z = (v == rft.Zero(v.Type()))
+		z = (v.Interface() == rft.Zero(v.Type()).Interface())
 	}
 
 	return z
 }
 
-func (t term) panic(format string, args ...interface{}) {
-	panic(fmt.Sprintf(t.name+": "+format, args...))
+func (tm term) panic(format string, args ...interface{}) {
+	panic(fmt.Sprintf(tm.name+": "+format, args...))
 }
 
-func (t term) errorf(format string, args ...interface{}) error {
-	return fmt.Errorf(t.name+": "+format, args...)
+func (tm term) errorf(format string, args ...interface{}) error {
+	return fmt.Errorf(tm.name+": "+format, args...)
 }
 
 func isspace(s string) bool {
