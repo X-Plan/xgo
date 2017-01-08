@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-08
+// 修订日期: 2017-01-09
 package xvalid
 
 import (
@@ -49,12 +49,25 @@ func newTerms(name, tag string) []term {
 	)
 
 	for _, t := range ts {
+		// 空白串直接跳过.
+		if isspace(t) {
+			continue
+		}
 		kv := strings.SplitN(t, "=", 2)
+		for i, _ := range kv {
+			kv[i] = strings.TrimSpace(kv[i])
+		}
 		if _, ok := m[kv[0]]; ok {
 			panic(fmt.Sprintf("%s: duplicate term '%s'", name, kv[0]))
 		}
-		m[kv[0]] = kv[1]
-		tms = append(tms, newTerm(name, kv[0], kv[1]))
+
+		if len(kv) == 1 {
+			m[kv[0]] = ""
+			tms = append(tms, newTerm(name, kv[0], ""))
+		} else {
+			m[kv[0]] = kv[1]
+			tms = append(tms, newTerm(name, kv[0], kv[1]))
+		}
 	}
 	return tms
 }
@@ -72,7 +85,7 @@ func newTerm(name, k, v string) term {
 	case "max":
 		tm.t, tm.check, tm.v = tmax, tm.template(tm.greater), getValue(tmax, v, name)
 	case "default":
-		tm.t, tm.check, tm.v = tmax, tm.template(tm.set), getValue(tdefault, v, name)
+		tm.t, tm.check, tm.v = tdefault, tm.template(tm.set), getValue(tdefault, v, name)
 	case "match":
 		tm.t, tm.check, tm.v = tmatch, tm.match, regexp.MustCompile(v)
 	default:

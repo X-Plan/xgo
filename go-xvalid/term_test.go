@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-08
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-08
+// 修订日期: 2017-01-09
 package xvalid
 
 import (
@@ -30,6 +30,21 @@ func TestNewTerm(t *testing.T) {
 	xassert.Match(t, cpanic(func() { newTerm("test", "min", "hello world") }), `invalid term 'min=hello world'`)
 	xassert.Match(t, cpanic(func() { newTerm("test", "max", "[1,2,3]") }), `invalid term 'max=\[1,2,3\]'`)
 	_ = newTerm("test", "default", `{ "a": 1, "b": "hello" }`).v.(string)
+}
+
+func TestNewTerms(t *testing.T) {
+	xassert.Match(t, cpanic(func() { newTerms("test", "min=1,max=10,default=5, max = 7") }), `duplicate term 'max'`)
+	xassert.Match(t, cpanic(func() { newTerms("test", "   noempty, min = 10, , , noempty ") }), `duplicate term 'noempty'`)
+	tms := newTerms("test", "  noempty , min = 10, max = 30.7, default=-10 ")
+	xassert.Equal(t, len(tms), 4)
+	xassert.Equal(t, tms[0].t, tnoempty)
+	xassert.Equal(t, tms[1].t, tmin)
+	xassert.Equal(t, tms[2].t, tmax)
+	xassert.Equal(t, tms[3].t, tdefault)
+	tms = newTerms("test", ",,,noempty  ,   ,    ,")
+	xassert.Equal(t, len(tms), 1)
+	xassert.Equal(t, tms[0].t, tnoempty)
+	xassert.Match(t, cpanic(func() { newTerms("test", " noempty =   min = 10   ") }), `invalid term 'noempty=min = 10'`)
 }
 
 type dummyUint struct {
