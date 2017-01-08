@@ -40,39 +40,80 @@ func Validate(x interface{}) error {
 	if fs, ok := x.(*flag.FlagSet); ok {
 		return validateFlagSet(fs)
 	} else {
-		return validateStruct(x)
+		return validate(x)
 	}
 }
 
-func validateStruct(x interface{}) error {
+// x的对应的Kind应该为Ptr,Interface,Slice,Array.关于Kind的
+// 定义可以参见: https://golang.org/pkg/reflect/#Kind
+func validate(x interface{}) (err error) {
 	var (
-		err error
-		xv  = rft.ValueOf(x).Elem()
-		xt  = xv.Type()
-		nf  = xv.NumField()
+		xv = rft.ValueOf(x)
 	)
 
-	for i := 0; i < nf; i++ {
+again:
+	switch xv.Kind() {
+	case rft.Ptr, rft.Interface:
+		if xv = xv.Elem(); xv.Kind() == rft.Struct {
+			err = validateStruct(x)
+		} else {
+			goto again
+		}
+	case rft.Slice, rft.Array:
+		for i := 0; i < xv.Len(); i++ {
+			v := xv.Index(i)
+			if err = validate(v.Addr().Interface()); err != nil {
+				break
+			}
+		}
+	case rft.Map:
+		// Map类型的处理比较特殊, 因为Map中的entity不可寻址.
+		// 因此需要先创建一个可寻址的entity, 对其进行完操作
+		// 后替换原有的entity.
+		for _, key := range xv.MapKeys() {
+			v := xv.MapIndex(key)
+			if err = validate(v.Addr().Interface()); err != nil {
+				break
+			}
+		}
+	}
+	return
+}
+
+func validateStruct(x interface{}) (err error) {
+	var (
+		xv    = rft.ValueOf(x).Elem()
+		xt, n = xv.Type(), xv.NumField()
+	)
+
+	for i := 0; i < n; i++ {
 		var (
-			fv, sf = xv.Field(i), xt.Field(i)
+			fv, sf         = xv.Field(i), xt.Field(i)
+			ft, kind, name = fv.Type(), fv.Kind(), sf.Name
 		)
 
 		if tag, ok := sf.Tag.Lookup("xvalid"); ok {
 			// 即便是xvalid tag的值为空, 但是只要设置了该tag.
 			// 当类型不匹配的时候依然会导致程序panic.
-			if !support[int(xv.Kind())] {
-				panic(fmt.Sprintf("%s: %v type can't support 'xvalid' tag", sf.Name, xv.Kind()))
+			if !support[int(kind)] {
+				panic(fmt.Sprintf("%s: %v type can't support 'xvalid' tag", name, kind))
 			}
-			tms := newTerms(sf.Name, tag)
 
+			tms := newTerms(name, tag)
 			for _, tm := range tms {
 				if err = tm.check(fv); err != nil {
-					return err
+					return
+				}
+			}
+
+			switch kind {
+			case rft.Struct, rft.Map, rft.Slice, rft.Array:
+				if err = validate(fv.Addr().Interface()); err != nil {
+					return
 				}
 			}
 		}
 	}
-	return nil
 }
 
 func validateFlagSet(fs *flag.FlagSet) error {
