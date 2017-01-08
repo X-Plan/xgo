@@ -195,7 +195,9 @@ func (t term) iszero(v rft.Value) bool {
 	)
 
 	switch v.Kind() {
-	case rft.Map, rft.Slice, rft.Interface, rft.Ptr:
+	case rft.Map, rft.Slice:
+		return v.Len() == 0
+	case rft.Interface, rft.Ptr:
 		return v.IsNil()
 	case rft.Array:
 		for i := 0; i < v.Len(); i++ {
@@ -206,7 +208,7 @@ func (t term) iszero(v rft.Value) bool {
 			z = z && t.iszero(v.Field(i))
 		}
 	default:
-		// bool, int, uint, float
+		// bool, int, uint, float, string
 		z = (v == rft.Zero(v.Type()))
 	}
 
