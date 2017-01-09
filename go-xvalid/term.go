@@ -44,30 +44,29 @@ type term struct {
 func newTerms(name, tag string) []term {
 	var (
 		tms []term
-		ts  = strings.Split(tag, ",")
+		ts  = strings.Split(strings.TrimSpace(tag), ",")
 		m   = make(map[string]string)
 	)
 
 	for _, t := range ts {
-		// 空白串直接跳过.
-		if isspace(t) {
-			continue
-		}
-		kv := strings.SplitN(t, "=", 2)
-		for i, _ := range kv {
-			kv[i] = strings.TrimSpace(kv[i])
-		}
-		if _, ok := m[kv[0]]; ok {
-			panic(fmt.Sprintf("%s: duplicate term '%s'", name, kv[0]))
+		var (
+			pair        = strings.SplitN(strings.TrimSpace(t), "=", 2)
+			k, v string = strings.TrimSpace(pair[0]), ""
+		)
+
+		if len(pair) == 1 {
+			if isspace(k) {
+				continue
+			}
+		} else if len(pair) == 2 {
+			v = strings.TrimSpace(pair[1])
 		}
 
-		if len(kv) == 1 {
-			m[kv[0]] = ""
-			tms = append(tms, newTerm(name, kv[0], ""))
-		} else {
-			m[kv[0]] = kv[1]
-			tms = append(tms, newTerm(name, kv[0], kv[1]))
+		if _, ok := m[k]; ok {
+			panic(fmt.Sprintf("%s: duplicate term '%s'", name, k))
 		}
+		m[k] = v
+		tms = append(tms, newTerm(name, k, v))
 	}
 	return tms
 }
@@ -87,8 +86,12 @@ func newTerm(name, k, v string) term {
 	case "default":
 		tm.t, tm.check, tm.v = tdefault, tm.template(tm.set), getValue(tdefault, v, name)
 	case "match":
-		tm.t, tm.check, tm.v = tmatch, tm.match, regexp.MustCompile(v)
+		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
+			tm.panic("invalid term 'match=%s'", v)
+		}
+		tm.t, tm.check, tm.v = tmatch, tm.match, regexp.MustCompile(v[1:len(v)-1])
 	default:
+		tm.panic("unknown term '%s'", k)
 	}
 	return tm
 }

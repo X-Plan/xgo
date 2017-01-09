@@ -10,14 +10,14 @@
 
 `xvalid` tag是用于配置合法性校验的信息, 其值由一些term组成.  相应的EBNF语法如下:
 
-      xvalid = term , [{ "," , term }] | "" ;
-      term = white space, (noempty | min | max | default | match), white space;
+      xvalid = space, [ term , [{ "," , term }] ], space
+      term = space, (noempty | min | max | default | match), space;
       noempty = "noempty" ;
-      min = "min", white space, "=", expr ;
-      max = "max", white space, "=", expr ;
-      default = "default", white space, "=", expr ;
-      match = "match", white space, "=", white space, "/", expr, "/", white space;
-      expr = white space, [{ character }], white space ;
+      min = "min", space, "=", expr ;
+      max = "max", space, "=", expr ;
+      default = "default", space, "=", expr ;
+      match = "match", space, "=", space, "/", expr, "/", space;
+      expr = space, [{ character }], space ;
       space = [{ white space }] ;
       white space = ? white space characters (include CRLF and TAB) ?;
       character = ? all visible characters ?;

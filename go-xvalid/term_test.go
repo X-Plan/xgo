@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	rft "reflect"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -45,6 +46,12 @@ func TestNewTerms(t *testing.T) {
 	xassert.Equal(t, len(tms), 1)
 	xassert.Equal(t, tms[0].t, tnoempty)
 	xassert.Match(t, cpanic(func() { newTerms("test", " noempty =   min = 10   ") }), `invalid term 'noempty=min = 10'`)
+	xassert.Match(t, cpanic(func() { newTerms("test", " noempty, = hello, min = 12") }), `unknown term ''`)
+	xassert.Match(t, cpanic(func() { newTerms("test", "=hello,match= /hello[[:space:]]*world/  ") }), `unknown term ''`)
+	tms = newTerms("test", " match = / hello[[:space:]]*world/ ")
+	xassert.Equal(t, len(tms), 1)
+	xassert.Equal(t, tms[0].t, tmatch)
+	xassert.IsTrue(t, tms[0].v.(*regexp.Regexp).MatchString(" hello   \t   world"))
 }
 
 type dummyUint struct {
