@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-12-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// 修订日期: 2017-01-10
 
 // go-xhttp2是net/http的一个扩展包, 提供了HTTP/1.1通过
 // Upgrade的方式升级到HTTP/2的支持.
@@ -106,7 +106,7 @@ func (xh xhandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 func handshake(rw http.ResponseWriter, req *http.Request) (ret int, err error, http2settings []xhttp2Setting) {
 	// 只有在HTTP/1.1并且携带Upgrade: h2c的情形下才进行
 	// HTTP/2的握手操作.
-	if req.ProtoMajor == 1 && req.ProtoMinor == 2 &&
+	if req.ProtoMajor == 1 && req.ProtoMinor == 1 &&
 		strings.ToLower(req.Header.Get("Upgrade")) == "h2c" {
 
 		// 大部分服务都没有支持OPTIONS操作,
