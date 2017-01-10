@@ -10,38 +10,87 @@ import (
 	"fmt"
 	rft "reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	tnoempty termtype = iota
+	tdefault termtype = iota
+	tnoempty
 	tmin
 	tmax
-	tdefault
 	tmatch
 )
 
 type termtype int
 
-var termstr = []string{"noempty", "min", "max", "default", "match"}
+var termstr = []string{"tdefault", "noempty", "min", "max", "match"}
 
 func (tt termtype) String() string {
 	return termstr[int(tt)]
 }
 
-// term支持的类型有: bool, int类, uint类(除了uintptr),
-// float类, ptr, string, array, slice, map, struct, interface.
-// 其它类型会导致term相关的操作panic.
-type term struct {
-	t     termtype
-	v     interface{}
-	name  string
-	check func(rft.Value) error
+type terms []*term
+
+// 检测tms中的条件是否存在矛盾, 如果存在则panic.
+//  当前版本下会执行以下操作:
+// 1. 如果同时存在default和min(max), default的的值
+// 必须满足min(max)的限制.
+func (tms terms) conflict() {
+	var (
+		err           error
+		def, min, max *term
+	)
+
+	for _, tm := range tms {
+		switch tm.t {
+		case tdefault:
+			def = tm
+		case tmin:
+			min = tm
+		case tmax:
+			min = tm
+		}
+	}
+
+	if def != nil {
+		if min != nil {
+			if err = min.check(rft.ValueOf(def.v)); err != nil {
+				max.panic("term '%s' and term '%s' are contradictory", def, min)
+			}
+		}
+		if max != nil {
+			if err = max.check(rft.ValueOf(def.v)); err != nil {
+				max.panic("term '%s' and term '%s' are contradictory", def, max)
+			}
+		}
+	}
 }
 
-func newTerms(name, tag string) []*term {
+// 重排tms中项的顺序, 当前版本执行的操作有:
+// 1. default会被放在优先处理的位置. 优先处理该项的
+// 原因在于保证后续的检测条件是在预设值的基础上进行
+// 的. 比如:noempty,default=10. 当未设置该值时应该
+// 先进行
+func (tms *terms) resort() {
+	sort.Sort(tms)
+}
+
+func (tms *terms) Len() int {
+	return len(*tms)
+}
+
+func (tms *terms) Less(i, j int) bool {
+	return (*tms)[i].t < (*tms)[j].t
+}
+
+func (tms *terms) Swap(i, j int) {
+	(*tms)[i], (*tms)[j] = (*tms)[j], (*tms)[i]
+}
+
+func newTerms(name, tag string) terms {
 	var (
 		tms []*term
 		ts  = strings.Split(strings.TrimSpace(tag), ",")
@@ -69,6 +118,16 @@ func newTerms(name, tag string) []*term {
 		tms = append(tms, newTerm(name, k, v))
 	}
 	return tms
+}
+
+// term支持的类型有: bool, int类, uint类(除了uintptr),
+// float类, ptr, string, array, slice, map, struct, interface.
+// 其它类型会导致term相关的操作panic.
+type term struct {
+	t     termtype
+	v     interface{}
+	name  string
+	check func(rft.Value) error
 }
 
 func newTerm(name, k, v string) *term {
@@ -159,7 +218,7 @@ func (tm *term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.V
 		}
 
 		if !ok {
-			return tm.errorf("can't satisfy term '%s=%v'", tm.t, tm.v)
+			return tm.errorf("can't satisfy term '%s'", tm)
 		}
 		return nil
 	}
@@ -241,6 +300,10 @@ func (tm *term) panic(format string, args ...interface{}) {
 
 func (tm *term) errorf(format string, args ...interface{}) error {
 	return fmt.Errorf(tm.name+": "+format, args...)
+}
+
+func (tm *term) String() string {
+	return fmt.Sprintf("%s=%v", tm.t, tm.v)
 }
 
 func isspace(s string) bool {

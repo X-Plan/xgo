@@ -104,6 +104,9 @@ func validateStruct(x interface{}) (err error) {
 			}
 
 			tms := newTerms(name, tag)
+			tms.conflict()
+			tms.resort()
+
 			for _, tm := range tms {
 				if err = tm.check(fv); err != nil {
 					return
