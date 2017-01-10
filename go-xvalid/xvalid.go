@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-08
+// 修订日期: 2017-01-10
 
 // go-xvalid是一个对配置参数进行合法性校验的工具包.
 package xvalid
@@ -61,9 +61,10 @@ again:
 		}
 	case rft.Slice, rft.Array:
 		for i := 0; i < xv.Len(); i++ {
-			v := xv.Index(i)
-			if err = validate(v.Addr().Interface()); err != nil {
-				break
+			if v := xv.Index(i); v.CanAddr() {
+				if err = validate(v.Addr().Interface()); err != nil {
+					break
+				}
 			}
 		}
 	case rft.Map:

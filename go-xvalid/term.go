@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-09
+// 修订日期: 2017-01-10
 package xvalid
 
 import (
@@ -78,18 +78,23 @@ func newTerm(name, k, v string) term {
 		if !isspace(v) {
 			tm.panic("invalid term 'noempty=%s'", v)
 		}
-		tm.t, tm.check = tnoempty, tm.noempty
+		tm.t = tnoempty
+		tm.check = tm.noempty
 	case "min":
-		tm.t, tm.check, tm.v = tmin, tm.template(tm.less), getValue(tmin, v, name)
+		tm.t, tm.v = tmin, getValue(tmin, v, name)
+		tm.check = tm.template(tm.greater)
 	case "max":
-		tm.t, tm.check, tm.v = tmax, tm.template(tm.greater), getValue(tmax, v, name)
+		tm.t, tm.v = tmax, getValue(tmax, v, name)
+		tm.check = tm.template(tm.less)
 	case "default":
-		tm.t, tm.check, tm.v = tdefault, tm.template(tm.set), getValue(tdefault, v, name)
+		tm.t, tm.v = tdefault, getValue(tdefault, v, name)
+		tm.check = tm.template(tm.set)
 	case "match":
 		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
 			tm.panic("invalid term 'match=%s'", v)
 		}
-		tm.t, tm.check, tm.v = tmatch, tm.match, regexp.MustCompile(v[1:len(v)-1])
+		tm.t, tm.v = tmatch, regexp.MustCompile(v[1:len(v)-1])
+		tm.check = tm.match
 	default:
 		tm.panic("unknown term '%s'", k)
 	}
@@ -112,8 +117,8 @@ func (tm term) match(v rft.Value) error {
 	if v.Kind() != rft.String {
 		tm.panic("%v type can't support 'match' term", v.Kind())
 	}
-	if re := tm.v.(*regexp.Regexp); re.MatchString(v.String()) {
-		return tm.errorf("'%s' not match 'match=%s' term", v.String(), re)
+	if re := tm.v.(*regexp.Regexp); !re.MatchString(v.String()) {
+		return tm.errorf("'%s' not match '%s'", v.String(), re)
 	}
 	return nil
 }
@@ -130,6 +135,8 @@ func (tm term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Va
 			ok = bop(v, tm.v)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
 			switch tm.v.(type) {
+			case int64:
+				tv = tm.v.(int64)
 			case uint64:
 				tv = int64(tm.v.(uint64))
 			case time.Duration:
@@ -138,6 +145,8 @@ func (tm term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Va
 			ok = bop(v, tv)
 		case rft.Float32, rft.Float64:
 			switch tm.v.(type) {
+			case float64:
+				tv = tm.v.(float64)
 			case uint64:
 				tv = float64(tm.v.(uint64))
 			case int64:
@@ -165,11 +174,11 @@ func (tm term) less(x rft.Value, y interface{}) bool {
 	var ok bool
 	switch y.(type) {
 	case uint64:
-		ok = (x.Uint() < y.(uint64))
+		ok = (x.Uint() <= y.(uint64))
 	case int64:
-		ok = (x.Int() < y.(int64))
+		ok = (x.Int() <= y.(int64))
 	case float64:
-		ok = (x.Float() < y.(float64))
+		ok = (x.Float() <= y.(float64))
 	}
 	return ok
 }
@@ -178,11 +187,11 @@ func (tm term) greater(x rft.Value, y interface{}) bool {
 	var ok bool
 	switch y.(type) {
 	case uint64:
-		ok = (x.Uint() > y.(uint64))
+		ok = (x.Uint() >= y.(uint64))
 	case int64:
-		ok = (x.Int() > y.(int64))
+		ok = (x.Int() >= y.(int64))
 	case float64:
-		ok = (x.Float() > y.(float64))
+		ok = (x.Float() >= y.(float64))
 	}
 	return ok
 }
@@ -192,9 +201,9 @@ func (tm term) set(x rft.Value, y interface{}) bool {
 		switch y.(type) {
 		case bool:
 			x.SetBool(y.(bool))
-		case uint64:
-			x.SetInt(y.(int64))
 		case int64:
+			x.SetInt(y.(int64))
+		case uint64:
 			x.SetUint(y.(uint64))
 		case float64:
 			x.SetFloat(y.(float64))
