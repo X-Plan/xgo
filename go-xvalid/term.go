@@ -41,9 +41,9 @@ type term struct {
 	check func(rft.Value) error
 }
 
-func newTerms(name, tag string) []term {
+func newTerms(name, tag string) []*term {
 	var (
-		tms []term
+		tms []*term
 		ts  = strings.Split(strings.TrimSpace(tag), ",")
 		m   = make(map[string]string)
 	)
@@ -71,37 +71,32 @@ func newTerms(name, tag string) []term {
 	return tms
 }
 
-func newTerm(name, k, v string) term {
-	tm := term{name: name}
+func newTerm(name, k, v string) *term {
+	tm := &term{name: name}
 	switch k {
 	case "noempty":
 		if !isspace(v) {
 			tm.panic("invalid term 'noempty=%s'", v)
 		}
-		tm.t = tnoempty
-		tm.check = tm.noempty
+		tm.t, tm.check = tnoempty, tm.noempty
 	case "min":
-		tm.t, tm.v = tmin, getValue(tmin, v, name)
-		tm.check = tm.template(tm.greater)
+		tm.t, tm.v, tm.check = tmin, getValue(tmin, v, name), tm.template(tm.greater)
 	case "max":
-		tm.t, tm.v = tmax, getValue(tmax, v, name)
-		tm.check = tm.template(tm.less)
+		tm.t, tm.v, tm.check = tmax, getValue(tmax, v, name), tm.template(tm.less)
 	case "default":
-		tm.t, tm.v = tdefault, getValue(tdefault, v, name)
-		tm.check = tm.template(tm.set)
+		tm.t, tm.v, tm.check = tdefault, getValue(tdefault, v, name), tm.template(tm.set)
 	case "match":
 		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
 			tm.panic("invalid term 'match=%s'", v)
 		}
-		tm.t, tm.v = tmatch, regexp.MustCompile(v[1:len(v)-1])
-		tm.check = tm.match
+		tm.t, tm.v, tm.check = tmatch, regexp.MustCompile(v[1:len(v)-1]), tm.match
 	default:
 		tm.panic("unknown term '%s'", k)
 	}
 	return tm
 }
 
-func (tm term) noempty(v rft.Value) error {
+func (tm *term) noempty(v rft.Value) error {
 	// 非空不能作用于bool类型, 因为这样产生的语
 	// 义会使结果恒为真. 这样的选项没有任何意义.
 	if v.Kind() == rft.Bool {
@@ -113,7 +108,7 @@ func (tm term) noempty(v rft.Value) error {
 	return nil
 }
 
-func (tm term) match(v rft.Value) error {
+func (tm *term) match(v rft.Value) error {
 	if v.Kind() != rft.String {
 		tm.panic("%v type can't support 'match' term", v.Kind())
 	}
@@ -123,7 +118,7 @@ func (tm term) match(v rft.Value) error {
 	return nil
 }
 
-func (tm term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Value) error {
+func (tm *term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Value) error {
 	return func(v rft.Value) error {
 		var (
 			ok bool
@@ -170,7 +165,7 @@ func (tm term) template(bop func(x rft.Value, y interface{}) bool) func(v rft.Va
 	}
 }
 
-func (tm term) less(x rft.Value, y interface{}) bool {
+func (tm *term) less(x rft.Value, y interface{}) bool {
 	var ok bool
 	switch y.(type) {
 	case uint64:
@@ -183,7 +178,7 @@ func (tm term) less(x rft.Value, y interface{}) bool {
 	return ok
 }
 
-func (tm term) greater(x rft.Value, y interface{}) bool {
+func (tm *term) greater(x rft.Value, y interface{}) bool {
 	var ok bool
 	switch y.(type) {
 	case uint64:
@@ -196,7 +191,7 @@ func (tm term) greater(x rft.Value, y interface{}) bool {
 	return ok
 }
 
-func (tm term) set(x rft.Value, y interface{}) bool {
+func (tm *term) set(x rft.Value, y interface{}) bool {
 	if tm.iszero(x) {
 		switch y.(type) {
 		case bool:
@@ -214,7 +209,7 @@ func (tm term) set(x rft.Value, y interface{}) bool {
 	return true
 }
 
-func (tm term) iszero(v rft.Value) bool {
+func (tm *term) iszero(v rft.Value) bool {
 	var (
 		z = true
 	)
@@ -240,11 +235,11 @@ func (tm term) iszero(v rft.Value) bool {
 	return z
 }
 
-func (tm term) panic(format string, args ...interface{}) {
+func (tm *term) panic(format string, args ...interface{}) {
 	panic(fmt.Sprintf(tm.name+": "+format, args...))
 }
 
-func (tm term) errorf(format string, args ...interface{}) error {
+func (tm *term) errorf(format string, args ...interface{}) error {
 	return fmt.Errorf(tm.name+": "+format, args...)
 }
 

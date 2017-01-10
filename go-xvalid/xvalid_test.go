@@ -66,5 +66,5 @@ func TestValidate(t *testing.T) {
 	}
 
 	xassert.IsNil(t, validate(f))
-	fmt.Printf("%#v", f)
+	fmt.Printf("%v", f)
 }
