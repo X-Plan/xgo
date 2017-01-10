@@ -28,11 +28,17 @@ var support = [...]bool{
 // 如果为*flag.FlagSet类型, 则校验规则依赖于Usage中的xvalid标签.
 // 如果为一般的struct类型, 则校验规则依赖于'xvalid'tag中的信息.
 // xvalid的由一组term构成, term之间用逗号分隔. term的取值如下:
-// 1. noempty: 非空. 对于数值类型则为非零.
-// 2. min: 最小值. 只对整型, 浮点型和time.Duration类型有效.
-// 3. max: 最大值. 只对整型, 浮点型和time.Duration类型有效.
-// 4. default: 默认值. 只对标量类型有效.
+//
+// 1. default: 默认值. 只对标量类型有效.
+// 2. noempty: 非空. 对于数值类型则为非零.
+// 3. min: 最小值. 只对整型, 浮点型和time.Duration类型有效.
+// 4. max: 最大值. 只对整型, 浮点型和time.Duration类型有效.
 // 5. match: 正则表达式匹配. 只对字符串类型有效.
+// 6. idefault: 默认值. (间接版).
+// 7. inoempty: 非空. (间接版).
+// 8. imin: 最小值. (间接版).
+// 9. imax: 最大值. (间接版).
+// 10. imatch: 正则表达式匹配. (间接版).
 //
 // 校验过程中会出现两种错误, 第一种是传入的x不符合接口要求, 会直接
 // panic, 第二种就是该项的值不符合xvalid的规则, 返回错误.
