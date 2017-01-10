@@ -26,7 +26,7 @@ const (
 
 type termtype int
 
-var termstr = []string{"tdefault", "noempty", "min", "max", "match"}
+var termstr = []string{"default", "noempty", "min", "max", "match"}
 
 func (tt termtype) String() string {
 	return termstr[int(tt)]
@@ -51,14 +51,14 @@ func (tms terms) conflict() {
 		case tmin:
 			min = tm
 		case tmax:
-			min = tm
+			max = tm
 		}
 	}
 
 	if def != nil {
 		if min != nil {
 			if err = min.check(rft.ValueOf(def.v)); err != nil {
-				max.panic("term '%s' and term '%s' are contradictory", def, min)
+				min.panic("term '%s' and term '%s' are contradictory", def, min)
 			}
 		}
 		if max != nil {
