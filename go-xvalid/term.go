@@ -158,11 +158,19 @@ func noempty(name string) func(rft.Value) error {
 
 func match(name string, tv interface{}) func(rft.Value) error {
 	return func(v rft.Value) error {
-		if v.Kind() != rft.String {
+		switch v.Kind() {
+		case rft.Array:
+			for i := 0; i < v.Len(); i++ {
+				if err := match(name, tv)(v.Index(i)); err != nil {
+					return err
+				}
+			}
+		case rft.String:
+			if re := tv.(*regexp.Regexp); !re.MatchString(v.String()) {
+				return fmt.Errorf("%s: '%s' not match '%s'", name, v.String(), re)
+			}
+		default:
 			panic(fmt.Sprintf("%s: %v type can't support 'match' term", name, v.Kind()))
-		}
-		if re := tv.(*regexp.Regexp); !re.MatchString(v.String()) {
-			return fmt.Errorf("%s: '%s' not match '%s'", name, v.String(), re)
 		}
 		return nil
 	}
@@ -174,6 +182,12 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 		var ok bool
 
 		switch v.Kind() {
+		case rft.Array:
+			for i := 0; i < v.Len(); i++ {
+				if err := template(name, tt, tv, bop)(v.Index(i)); err != nil {
+					return err
+				}
+			}
 		case rft.Uint, rft.Uint8, rft.Uint16, rft.Uint32, rft.Uint64:
 			ok = bop(v, tv)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
