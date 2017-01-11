@@ -42,7 +42,39 @@ func (tt termtype) String() string {
 
 type terms []*term
 
-func (tms *terms) conflict() {
+func (tms terms) conflict() {
+	tms.conflictDefMinMax("")
+	tms.conflictDefMinMax("i")
+}
+
+func (tms terms) conflictDefMinMax(iprefix string) {
+	var (
+		err           error
+		def, min, max *term
+	)
+	for _, tm := range tms {
+		switch tm.t.String() {
+		case iprefix + "default":
+			def = tm
+		case iprefix + "min":
+			min = tm
+		case iprefix + "max":
+			max = tm
+		}
+	}
+
+	if def != nil {
+		if min != nil {
+			if err = min.check(rft.ValueOf(def.v)); err != nil {
+				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", min.name, min, def))
+			}
+		}
+		if max != nil {
+			if err = max.check(rft.ValueOf(def.v)); err != nil {
+				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", max.name, max, def))
+			}
+		}
+	}
 }
 
 // 重排tms中项的顺序, 当前版本执行的操作有:
@@ -101,14 +133,21 @@ func newTerms(name, tag string) terms {
 // 其它类型会导致term相关的操作panic.
 type term struct {
 	t     termtype
+	v     interface{}
+	name  string
 	check func(rft.Value) error
+}
+
+func (tm term) String() string {
+	return fmt.Sprintf("%s=%v", tm.t, tm.v)
 }
 
 func newTerm(name, k, v string) *term {
 	tm := &term{}
 	switch k {
 	case "default", "idefault":
-		tm.t, tm.check = tdefault, template(name, tdefault, getvalue(tdefault, v, name), set)
+		tm.t, tm.v, tm.name = tdefault, getvalue(tdefault, v, name), name
+		tm.check = template(name, tdefault, tm.v, set)
 		if k == "idefault" {
 			tm.t, tm.check = tidefault, indirect(name, tidefault, tm.check)
 		}
@@ -116,17 +155,19 @@ func newTerm(name, k, v string) *term {
 		if !isspace(v) {
 			panic(fmt.Sprintf("%s: invalid term 'noempty=%s'", name, v))
 		}
-		tm.t, tm.check = tnoempty, noempty(name)
+		tm.t, tm.check, tm.name = tnoempty, noempty(name), name
 		if k == "inoempty" {
 			tm.t, tm.check = tinoempty, indirect(name, tinoempty, tm.check)
 		}
 	case "min", "imin":
-		tm.t, tm.check = tmin, template(name, tmin, getvalue(tmin, v, name), greater)
+		tm.t, tm.v, tm.name = tmin, getvalue(tmin, v, name), name
+		tm.check = template(name, tmin, tm.v, greater)
 		if k == "imin" {
 			tm.t, tm.check = timin, indirect(name, timin, tm.check)
 		}
 	case "max", "imax":
-		tm.t, tm.check = tmax, template(name, tmax, getvalue(tmax, v, name), less)
+		tm.t, tm.v, tm.name = tmax, getvalue(tmax, v, name), name
+		tm.check = template(name, tmax, tm.v, less)
 		if k == "imax" {
 			tm.t, tm.check = timax, indirect(name, timax, tm.check)
 		}
@@ -134,7 +175,8 @@ func newTerm(name, k, v string) *term {
 		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
 			panic(fmt.Sprintf("%s: invalid term 'match=%s'", name, v))
 		}
-		tm.t, tm.check = tmatch, match(name, regexp.MustCompile(v[1:len(v)-1]))
+		tm.t, tm.v, tm.name = tmatch, regexp.MustCompile(v[1:len(v)-1]), name
+		tm.check = match(name, tm.v)
 		if k == "imatch" {
 			tm.t, tm.check = timatch, indirect(name, timatch, tm.check)
 		}

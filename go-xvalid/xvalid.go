@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-10
+// 修订日期: 2017-01-11
 
 // go-xvalid是一个对配置参数进行合法性校验的工具包.
 package xvalid
@@ -120,9 +120,9 @@ func validateStruct(x interface{}) (err error) {
 			}
 
 			switch kind {
-			case rft.Struct:
-				err = validateStruct(fv.Addr().Interface())
-			case rft.Ptr, rft.Interface, rft.Slice, rft.Array, rft.Map:
+			case rft.Struct, rft.Array:
+				err = validate(fv.Addr().Interface())
+			case rft.Ptr, rft.Interface, rft.Slice, rft.Map:
 				err = validate(fv.Interface())
 			}
 		}
