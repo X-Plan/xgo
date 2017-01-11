@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-10
+// 修订日期: 2017-01-11
 package xvalid
 
 import (
@@ -24,6 +24,18 @@ type parse3 struct {
 	A int `xvalid:"max=200,default=200.2,min=-20"`
 }
 
+type parse7 struct {
+	A *int `xvalid:"imin = 100, min = 50, idefault = 80"`
+}
+
+type parse8 struct {
+	A *int `xvalid:"max = 100, idefault = 80, imax = 50"`
+}
+
+type parse9 struct {
+	A *int `xvalid:"imin = 100, idefault = 200, imax = 150"`
+}
+
 func TestConflictTerm(t *testing.T) {
 	p1 := &parse1{}
 	xassert.Match(t, cpanic(func() { validate(p1) }), `term 'default=-100' and term 'min=200' are contradictory`)
@@ -31,6 +43,12 @@ func TestConflictTerm(t *testing.T) {
 	xassert.Match(t, cpanic(func() { validate(p2) }), `term 'default=200.2' and term 'max=200' are contradictory`)
 	p3 := &parse3{}
 	xassert.Match(t, cpanic(func() { validate(p3) }), `term '.*' and term '.*' are contradictory`)
+	p7 := &parse7{}
+	xassert.Match(t, cpanic(func() { validate(p7) }), `term 'idefault=80' and term 'imin=100' are contradictory`)
+	p8 := &parse8{}
+	xassert.Match(t, cpanic(func() { validate(p8) }), `term 'idefault=80' and term 'imax=50' are contradictory`)
+	p9 := &parse9{}
+	xassert.Match(t, cpanic(func() { validate(p9) }), `term 'idefault=200' and term '.*' are contradictory`)
 }
 
 type parse4 struct {
@@ -58,58 +76,30 @@ func InvalidTerm(t *testing.T) {
 }
 
 type foo1 struct {
-	A bool              `xvalid:"default=true"`
-	B int               `xvalid:"min=-10,max=200, default=-5"`
-	C uint              `xvalid:"min=10,max=300, default=100"`
-	D float64           `xvalid:"noempty, min=-12.2,max=32.3,default=23.3"`
-	E string            `xvalid:"noempty,match = /^hello[[:space:]]+world$/"`
-	G []string          `xvalid:"noempty"`
-	H *[3]string        `xvalid:"noempty"`
-	I foo2              `xvalid:"noempty"`
-	J *foo2             `xvalid:"noempty"`
-	K map[string]string `xvalid:"noempty"`
-}
-
-type foo2 struct {
-	A int8        `xvalid:"default=10,min=5,max=20"`
-	B uint8       `xvalid:"min=10"`
-	C interface{} `xvalid:"noempty"`
-	D *foo3       `xvalid:"noempty"`
-}
-
-type foo3 struct {
-	A bool     `xvalid:"default=true"`
-	B int      `xvalid:"min=-10,max=200, default=-5"`
-	C uint     `xvalid:"min=10,max=300, default=100"`
-	D float64  `xvalid:"min=-12.2,max=32.3,default=23.3"`
-	E string   `xvalid:"noempty,match = /^hello[[:space:]]*world$/"`
-	G []string `xvalid:"noempty"`
+	A bool           `xvalid:"default=true"`
+	B uint           `xvalid:"min=10,max=100,default=50"`
+	C int            `xvalid:"min=-10,max=100,noempty,default=-1"`
+	D string         `xvalid:"noempty,default= hello world"`
+	E [3]string      `xvalid:"default=blinklv"`
+	F [3]int         `xvalid:"min=10,max=100"`
+	G *[3]string     `xvalid:"idefault=x-plan"`
+	H []uint         `xvalid:"imin=100, imax=200"`
+	I map[string]int `xvalid:"imin=-100, imax=200"`
 }
 
 func TestValidate(t *testing.T) {
-	var f = &foo1{
-		D: 30.42,
-		E: "hello   world",
-		G: []string{"Are you ok"},
-		H: &[3]string{"hello", "world", "!"},
-		I: foo2{
-			B: 20,
-			C: 10,
-			D: &foo3{
-				E: "hello world",
-				G: []string{"hello", "world"},
-			},
-		},
-		J: &foo2{
-			B: 20,
-			C: 10,
-			D: &foo3{
-				E: "hello world",
-				G: []string{"hello", "world"},
-			},
-		},
-		K: map[string]string{"hello": "world"},
-	}
-
-	xassert.IsNil(t, validate(f))
+	f1 := &foo1{}
+	xassert.Match(t, validate(f1), `F: can't satisfy term 'min.*'`)
+	f1.A = false
+	f1.E = [3]string{"hello"}
+	f1.F = [3]int{10, 100, 50}
+	f1.G = &[3]string{"X-Plan"}
+	xassert.IsNil(t, validate(f1))
+	f1.H = []uint{101, 100, 99, 200}
+	xassert.Match(t, validate(f1), `.*\[2\]: can't satisfy term 'imin=100'`)
+	f1.H[2] = 201
+	xassert.Match(t, validate(f1), `.*\[2\]: can't satisfy term 'imax=200'`)
+	f1.H[2] = 150
+	f1.I = map[string]int{"hello": 200, "world": -200}
+	xassert.Match(t, validate(f1), `.*\[world\]: can't satisfy term 'imin=-100'`)
 }

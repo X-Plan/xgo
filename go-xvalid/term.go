@@ -64,14 +64,15 @@ func (tms terms) conflictDefMinMax(iprefix string) {
 	}
 
 	if def != nil {
+		// 这里不管是直接版本还是间接版本统一使用直接版本进行验证.
 		if min != nil {
-			if err = min.check(rft.ValueOf(def.v)); err != nil {
-				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", min.name, min, def))
+			if err = template(min.name, tmin, min.v, greater)(rft.ValueOf(def.v)); err != nil {
+				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", min.name, def, min))
 			}
 		}
 		if max != nil {
-			if err = max.check(rft.ValueOf(def.v)); err != nil {
-				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", max.name, max, def))
+			if err = template(max.name, tmax, max.v, less)(rft.ValueOf(def.v)); err != nil {
+				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", max.name, def, max))
 			}
 		}
 	}
@@ -149,7 +150,7 @@ func newTerm(name, k, v string) *term {
 		tm.t, tm.v, tm.name = tdefault, getvalue(tdefault, v, name), name
 		tm.check = template(name, tdefault, tm.v, set)
 		if k == "idefault" {
-			tm.t, tm.check = tidefault, indirect(name, tidefault, tm.check)
+			tm.t, tm.check = tidefault, indirect(name, tidefault, template("", tidefault, tm.v, set))
 		}
 	case "noempty", "inoempty":
 		if !isspace(v) {
@@ -157,19 +158,19 @@ func newTerm(name, k, v string) *term {
 		}
 		tm.t, tm.check, tm.name = tnoempty, noempty(name), name
 		if k == "inoempty" {
-			tm.t, tm.check = tinoempty, indirect(name, tinoempty, tm.check)
+			tm.t, tm.check = tinoempty, indirect(name, tinoempty, noempty(""))
 		}
 	case "min", "imin":
 		tm.t, tm.v, tm.name = tmin, getvalue(tmin, v, name), name
 		tm.check = template(name, tmin, tm.v, greater)
 		if k == "imin" {
-			tm.t, tm.check = timin, indirect(name, timin, tm.check)
+			tm.t, tm.check = timin, indirect(name, timin, template("", timin, tm.v, greater))
 		}
 	case "max", "imax":
 		tm.t, tm.v, tm.name = tmax, getvalue(tmax, v, name), name
 		tm.check = template(name, tmax, tm.v, less)
 		if k == "imax" {
-			tm.t, tm.check = timax, indirect(name, timax, tm.check)
+			tm.t, tm.check = timax, indirect(name, timax, template("", timax, tm.v, less))
 		}
 	case "match", "imatch":
 		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
@@ -178,7 +179,7 @@ func newTerm(name, k, v string) *term {
 		tm.t, tm.v, tm.name = tmatch, regexp.MustCompile(v[1:len(v)-1]), name
 		tm.check = match(name, tm.v)
 		if k == "imatch" {
-			tm.t, tm.check = timatch, indirect(name, timatch, tm.check)
+			tm.t, tm.check = timatch, indirect(name, timatch, match("", tm.v))
 		}
 	default:
 		panic(fmt.Sprintf("%s: unknown term '%s'", name, k))
@@ -230,6 +231,7 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 					return err
 				}
 			}
+			ok = true
 		case rft.Uint, rft.Uint8, rft.Uint16, rft.Uint32, rft.Uint64:
 			ok = bop(v, tv)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
@@ -249,7 +251,7 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 			}
 			ok = bop(v, tv)
 		case rft.Bool, rft.String:
-			if tt == tdefault {
+			if tt == tdefault || tt == tidefault {
 				ok = bop(v, tv)
 				break
 			}
@@ -314,12 +316,14 @@ func indirect(name string, tt termtype, check func(rft.Value) error) func(rft.Va
 		// 间接版本只针对Pointer, Interface, Slice, Map.
 		switch v.Kind() {
 		case rft.Ptr, rft.Interface:
-			return check(v.Elem())
+			if !v.IsNil() {
+				check(v.Elem())
+			}
 		case rft.Slice:
 			for i := 0; i < v.Len(); i++ {
 				if sv := v.Index(i); sv.CanAddr() {
 					if err := check(sv); err != nil {
-						return fmt.Errorf("[%v]%s", i, err)
+						return fmt.Errorf("%s[%v]%s", name, i, err)
 					}
 				}
 			}
@@ -329,7 +333,7 @@ func indirect(name string, tt termtype, check func(rft.Value) error) func(rft.Va
 				sv := rft.New(org.Type()).Elem()
 				sv.Set(org)
 				if err := check(sv); err != nil {
-					return fmt.Errorf("[%v]%s", key, err)
+					return fmt.Errorf("%s[%v]%s", name, key, err)
 				}
 				v.SetMapIndex(key, sv)
 			}
