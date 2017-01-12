@@ -3,10 +3,11 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-11
+// 修订日期: 2017-01-12
 package xvalid
 
 import (
+	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"testing"
 )
@@ -38,17 +39,17 @@ type parse9 struct {
 
 func TestConflictTerm(t *testing.T) {
 	p1 := &parse1{}
-	xassert.Match(t, cpanic(func() { validate(p1) }), `term 'default=-100' and term 'min=200' are contradictory`)
+	xassert.Match(t, cpanic(func() { Validate(p1) }), `term 'default=-100' and term 'min=200' are contradictory`)
 	p2 := &parse2{}
-	xassert.Match(t, cpanic(func() { validate(p2) }), `term 'default=200.2' and term 'max=200' are contradictory`)
+	xassert.Match(t, cpanic(func() { Validate(p2) }), `term 'default=200.2' and term 'max=200' are contradictory`)
 	p3 := &parse3{}
-	xassert.Match(t, cpanic(func() { validate(p3) }), `term '.*' and term '.*' are contradictory`)
+	xassert.Match(t, cpanic(func() { Validate(p3) }), `term '.*' and term '.*' are contradictory`)
 	p7 := &parse7{}
-	xassert.Match(t, cpanic(func() { validate(p7) }), `term 'idefault=80' and term 'imin=100' are contradictory`)
+	xassert.Match(t, cpanic(func() { Validate(p7) }), `term 'idefault=80' and term 'imin=100' are contradictory`)
 	p8 := &parse8{}
-	xassert.Match(t, cpanic(func() { validate(p8) }), `term 'idefault=80' and term 'imax=50' are contradictory`)
+	xassert.Match(t, cpanic(func() { Validate(p8) }), `term 'idefault=80' and term 'imax=50' are contradictory`)
 	p9 := &parse9{}
-	xassert.Match(t, cpanic(func() { validate(p9) }), `term 'idefault=200' and term '.*' are contradictory`)
+	xassert.Match(t, cpanic(func() { Validate(p9) }), `term 'idefault=200' and term '.*' are contradictory`)
 }
 
 type parse4 struct {
@@ -57,7 +58,7 @@ type parse4 struct {
 
 func TestUnknownTerm(t *testing.T) {
 	p4 := &parse4{}
-	xassert.Match(t, cpanic(func() { validate(p4) }), `unknown term 'foo'`)
+	xassert.Match(t, cpanic(func() { Validate(p4) }), `unknown term 'foo'`)
 }
 
 type parse5 struct {
@@ -70,36 +71,55 @@ type parse6 struct {
 
 func InvalidTerm(t *testing.T) {
 	p5 := &parse5{}
-	xassert.Match(t, cpanic(func() { validate(p5) }), `invalid term 'match=/helloworld'`)
+	xassert.Match(t, cpanic(func() { Validate(p5) }), `invalid term 'match=/helloworld'`)
 	p6 := &parse6{}
-	xassert.Match(t, cpanic(func() { validate(p6) }), `invalid term 'min=helloworld'`)
+	xassert.Match(t, cpanic(func() { Validate(p6) }), `invalid term 'min=helloworld'`)
+}
+
+type foo struct {
+	Z foo1 `xvalid:""`
 }
 
 type foo1 struct {
-	A bool           `xvalid:"default=true"`
-	B uint           `xvalid:"min=10,max=100,default=50"`
-	C int            `xvalid:"min=-10,max=100,noempty,default=-1"`
-	D string         `xvalid:"noempty,default= hello world"`
-	E [3]string      `xvalid:"default=blinklv"`
-	F [3]int         `xvalid:"min=10,max=100"`
-	G *[3]string     `xvalid:"idefault=x-plan"`
-	H []uint         `xvalid:"imin=100, imax=200"`
-	I map[string]int `xvalid:"imin=-100, imax=200"`
+	A map[string]*foo2 `xvalid:"inoempty"`
+}
+
+type foo2 struct {
+	B []foo3 `xvalid:"inoempty"`
+}
+
+type foo3 struct {
+	C [3]string `xvalid:"noempty,default=blinklv"`
+	D *int      `xvalid:"imax=100"`
 }
 
 func TestValidate(t *testing.T) {
-	f1 := &foo1{}
-	xassert.Match(t, validate(f1), `F: can't satisfy term 'min.*'`)
-	f1.A = false
-	f1.E = [3]string{"hello"}
-	f1.F = [3]int{10, 100, 50}
-	f1.G = &[3]string{"X-Plan"}
-	xassert.IsNil(t, validate(f1))
-	f1.H = []uint{101, 100, 99, 200}
-	xassert.Match(t, validate(f1), `.*\[2\]: can't satisfy term 'imin=100'`)
-	f1.H[2] = 201
-	xassert.Match(t, validate(f1), `.*\[2\]: can't satisfy term 'imax=200'`)
-	f1.H[2] = 150
-	f1.I = map[string]int{"hello": 200, "world": -200}
-	xassert.Match(t, validate(f1), `.*\[world\]: can't satisfy term 'imin=-100'`)
+	var i = 200
+	f := &foo{
+		Z: foo1{
+			A: map[string]*foo2{
+				"hello": &foo2{
+					B: []foo3{
+						foo3{C: [3]string{"aaaa"}},
+						foo3{C: [3]string{"ok"}},
+					},
+				},
+				"world": &foo2{
+					B: []foo3{
+						foo3{C: [3]string{"bbbb"}, D: &i},
+						foo3{C: [3]string{"cccc", "ddddd"}},
+					},
+				},
+			},
+		},
+	}
+
+	fmt.Println(Validate(f))
+
+	var fslice, farray = []*foo{f, f}, &[3]*foo{f, f, f}
+	fmt.Println(Validate(fslice))
+	fmt.Println(Validate(farray))
+
+	var fmap = map[string]*foo{"bar": f}
+	fmt.Println(Validate(fmap))
 }

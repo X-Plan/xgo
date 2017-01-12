@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-11
+// 修订日期: 2017-01-12
 
 // go-xvalid是一个对配置参数进行合法性校验的工具包.
 package xvalid
@@ -46,13 +46,13 @@ func Validate(x interface{}) error {
 	if fs, ok := x.(*flag.FlagSet); ok {
 		return validateFlagSet(fs)
 	} else {
-		return validate(x)
+		return validate("", x)
 	}
 }
 
 // x的对应的Kind应该为Ptr,Interface,Slice,Array.关于Kind的
 // 定义可以参见: https://golang.org/pkg/reflect/#Kind
-func validate(x interface{}) (err error) {
+func validate(prefix string, x interface{}) (err error) {
 	var (
 		xv = rft.ValueOf(x)
 	)
@@ -61,14 +61,15 @@ again:
 	switch xv.Kind() {
 	case rft.Ptr, rft.Interface:
 		if xv = xv.Elem(); xv.Kind() == rft.Struct {
-			err = validateStruct(x)
+			err = validateStruct(prefix, xv.Addr().Interface())
 		} else {
 			goto again
 		}
 	case rft.Slice, rft.Array:
 		for i := 0; i < xv.Len(); i++ {
 			if v := xv.Index(i); v.CanAddr() {
-				if err = validate(v.Addr().Interface()); err != nil {
+				newprefix := fmt.Sprintf("%s[%d].", prefix, i)
+				if err = validate(newprefix, v.Addr().Interface()); err != nil {
 					break
 				}
 			}
@@ -81,7 +82,8 @@ again:
 			org := xv.MapIndex(key)
 			v := rft.New(org.Type()).Elem()
 			v.Set(org)
-			if err = validate(v.Addr().Interface()); err != nil {
+			newprefix := fmt.Sprintf("%s[%v].", prefix, key.Interface())
+			if err = validate(newprefix, v.Addr().Interface()); err != nil {
 				break
 			}
 			xv.SetMapIndex(key, v)
@@ -90,7 +92,7 @@ again:
 	return
 }
 
-func validateStruct(x interface{}) (err error) {
+func validateStruct(prefix string, x interface{}) (err error) {
 	var (
 		xv    = rft.ValueOf(x).Elem()
 		xt, n = xv.Type(), xv.NumField()
@@ -99,7 +101,7 @@ func validateStruct(x interface{}) (err error) {
 	for i := 0; i < n; i++ {
 		var (
 			fv, sf     = xv.Field(i), xt.Field(i)
-			kind, name = fv.Kind(), sf.Name
+			kind, name = fv.Kind(), prefix + sf.Name
 		)
 
 		if tag, ok := sf.Tag.Lookup("xvalid"); ok && fv.CanSet() {
@@ -120,10 +122,15 @@ func validateStruct(x interface{}) (err error) {
 			}
 
 			switch kind {
-			case rft.Struct, rft.Array:
-				err = validate(fv.Addr().Interface())
+			case rft.Struct:
+				err = validate(name+".", fv.Addr().Interface())
+			case rft.Array:
+				err = validate(name, fv.Addr().Interface())
 			case rft.Ptr, rft.Interface, rft.Slice, rft.Map:
-				err = validate(fv.Interface())
+				err = validate(name, fv.Interface())
+			}
+			if err != nil {
+				return
 			}
 		}
 	}

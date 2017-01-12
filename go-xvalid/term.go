@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-11
+// 修订日期: 2017-01-12
 package xvalid
 
 import (
@@ -317,7 +317,9 @@ func indirect(name string, tt termtype, check func(rft.Value) error) func(rft.Va
 		switch v.Kind() {
 		case rft.Ptr, rft.Interface:
 			if !v.IsNil() {
-				check(v.Elem())
+				if err := check(v.Elem()); err != nil {
+					return fmt.Errorf("*(%s)%s", name, err)
+				}
 			}
 		case rft.Slice:
 			for i := 0; i < v.Len(); i++ {
