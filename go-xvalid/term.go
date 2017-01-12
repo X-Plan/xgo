@@ -305,7 +305,7 @@ func set(x rft.Value, y interface{}) bool {
 		case float64:
 			x.SetFloat(y.(float64))
 		case string:
-			x.SetString(y.(string))
+			x.SetString(fmt.Sprint(y))
 		}
 	}
 	return true
