@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-12
+// 修订日期: 2017-01-14
 package xvalid
 
 import (
@@ -233,6 +233,27 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 			}
 			ok = true
 		case rft.Uint, rft.Uint8, rft.Uint16, rft.Uint32, rft.Uint64:
+			// 类型转换依赖于termtype类型, 当为(i)min和(i)max的时候
+			// 进行类型扩展, 当为(i)default则按照field类型进行转换.
+			if tt == tdefault || tt == tidefault {
+				switch tv.(type) {
+				case int64:
+					tv = uint64(tv.(int64))
+				case time.Duration:
+					tv = uint64(tv.(time.Duration))
+				case float64:
+					tv = uint64(tv.(float64))
+				}
+			} else {
+				// 这里对v重新赋值, 这里并不要求v具备CanSet,
+				// 因为比较大小不需要这个属性.
+				switch tv.(type) {
+				case int64, time.Duration:
+					v = rft.ValueOf(int64(v.Uint()))
+				case float64:
+					v = rft.ValueOf(float64(v.Uint()))
+				}
+			}
 			ok = bop(v, tv)
 		case rft.Int, rft.Int8, rft.Int16, rft.Int32, rft.Int64:
 			switch tv.(type) {
@@ -240,7 +261,14 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 				tv = int64(tv.(uint64))
 			case time.Duration:
 				tv = int64(tv.(time.Duration))
+			case float64:
+				if tt == tdefault || tt == tidefault {
+					tv = int64(tv.(float64))
+				} else {
+					v = rft.ValueOf(float64(v.Int()))
+				}
 			}
+
 			ok = bop(v, tv)
 		case rft.Float32, rft.Float64:
 			switch tv.(type) {
@@ -248,6 +276,8 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 				tv = float64(tv.(uint64))
 			case int64:
 				tv = float64(tv.(int64))
+			case time.Duration:
+				tv = float64(tv.(time.Duration))
 			}
 			ok = bop(v, tv)
 		case rft.Bool, rft.String:

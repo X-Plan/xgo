@@ -3,11 +3,10 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-12
+// 修订日期: 2017-01-14
 package xvalid
 
 import (
-	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"testing"
 )
@@ -76,50 +75,47 @@ func InvalidTerm(t *testing.T) {
 	xassert.Match(t, cpanic(func() { Validate(p6) }), `invalid term 'min=helloworld'`)
 }
 
-type foo struct {
-	Z foo1 `xvalid:""`
+func TestBool(t *testing.T) {
+	var x = struct {
+		Bool bool `xvalid:"noempty"`
+	}{Bool: true}
+	xassert.Match(t, cpanic(func() { Validate(&x) }), `Bool: bool type can't support 'noempty' term`)
+
+	var y = struct {
+		Bool bool `xvalid:"default=True"`
+	}{}
+	xassert.IsNil(t, Validate(&y))
+	xassert.IsTrue(t, y.Bool)
+
+	var z = struct {
+		Bool bool `xvalid:"min=10"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&z) }), `Bool: bool type can't support 'min' term`)
+
+	var a = struct {
+		Bool bool `xvalid:"max=17.2"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&a) }), `Bool: bool type can't support 'max' term`)
+
+	var b = struct {
+		Bool bool `xvalid:"match=/hello world/"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&b) }), `Bool: bool type can't support 'match' term`)
+
+	var c = struct {
+		Bool bool `xvalid:"idefault=true"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&c) }), `Bool: bool type can't support 'idefault' term`)
 }
 
-type foo1 struct {
-	A map[string]*foo2 `xvalid:"inoempty"`
-}
+func TestNumber(t *testing.T) {
+	var a = struct {
+		Int int `xvalid:"min=-10,max=10,default=-2"`
+	}{}
+	xassert.IsNil(t, Validate(&a))
 
-type foo2 struct {
-	B []foo3 `xvalid:"inoempty"`
-}
-
-type foo3 struct {
-	C [3]string `xvalid:"noempty,default=blinklv"`
-	D *int      `xvalid:"imax=100"`
-}
-
-func TestValidate(t *testing.T) {
-	var i = 200
-	f := &foo{
-		Z: foo1{
-			A: map[string]*foo2{
-				"hello": &foo2{
-					B: []foo3{
-						foo3{C: [3]string{"aaaa"}},
-						foo3{C: [3]string{"ok"}},
-					},
-				},
-				"world": &foo2{
-					B: []foo3{
-						foo3{C: [3]string{"bbbb"}, D: &i},
-						foo3{C: [3]string{"cccc", "ddddd"}},
-					},
-				},
-			},
-		},
-	}
-
-	fmt.Println(Validate(f))
-
-	var fslice, farray = []*foo{f, f}, &[3]*foo{f, f, f}
-	fmt.Println(Validate(fslice))
-	fmt.Println(Validate(farray))
-
-	var fmap = map[string]*foo{"bar": f}
-	fmt.Println(Validate(fmap))
+	var b = struct {
+		Uint uint `xvalid:"min=-10,max=10,default=-2"`
+	}{Uint: 5}
+	xassert.IsNil(t, Validate(&b))
 }
