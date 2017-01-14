@@ -66,12 +66,12 @@ func (tms terms) conflictDefMinMax(iprefix string) {
 	if def != nil {
 		// 这里不管是直接版本还是间接版本统一使用直接版本进行验证.
 		if min != nil {
-			if err = template(min.name, tmin, min.v, greater)(rft.ValueOf(def.v)); err != nil {
+			if err = template(min.name, "", tmin, min.v, greater)(rft.ValueOf(def.v)); err != nil {
 				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", min.name, def, min))
 			}
 		}
 		if max != nil {
-			if err = template(max.name, tmax, max.v, less)(rft.ValueOf(def.v)); err != nil {
+			if err = template(max.name, "", tmax, max.v, less)(rft.ValueOf(def.v)); err != nil {
 				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", max.name, def, max))
 			}
 		}
@@ -148,9 +148,9 @@ func newTerm(name, k, v string) *term {
 	switch k {
 	case "default", "idefault":
 		tm.t, tm.v, tm.name = tdefault, getvalue(tdefault, v, name), name
-		tm.check = template(name, tdefault, tm.v, set)
+		tm.check = template(name, v, tdefault, tm.v, set)
 		if k == "idefault" {
-			tm.t, tm.check = tidefault, indirect(name, tidefault, template("", tidefault, tm.v, set))
+			tm.t, tm.check = tidefault, indirect(name, tidefault, template("", v, tidefault, tm.v, set))
 		}
 	case "noempty", "inoempty":
 		if !isspace(v) {
@@ -162,15 +162,15 @@ func newTerm(name, k, v string) *term {
 		}
 	case "min", "imin":
 		tm.t, tm.v, tm.name = tmin, getvalue(tmin, v, name), name
-		tm.check = template(name, tmin, tm.v, greater)
+		tm.check = template(name, v, tmin, tm.v, greater)
 		if k == "imin" {
-			tm.t, tm.check = timin, indirect(name, timin, template("", timin, tm.v, greater))
+			tm.t, tm.check = timin, indirect(name, timin, template("", v, timin, tm.v, greater))
 		}
 	case "max", "imax":
 		tm.t, tm.v, tm.name = tmax, getvalue(tmax, v, name), name
-		tm.check = template(name, tmax, tm.v, less)
+		tm.check = template(name, v, tmax, tm.v, less)
 		if k == "imax" {
-			tm.t, tm.check = timax, indirect(name, timax, template("", timax, tm.v, less))
+			tm.t, tm.check = timax, indirect(name, timax, template("", v, timax, tm.v, less))
 		}
 	case "match", "imatch":
 		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
@@ -219,7 +219,7 @@ func match(name string, tv interface{}) func(rft.Value) error {
 	}
 }
 
-func template(name string, tt termtype, tv interface{}, bop func(rft.Value, interface{}) bool) func(rft.Value) error {
+func template(name string, strv string, tt termtype, tv interface{}, bop func(rft.Value, interface{}) bool) func(rft.Value) error {
 	return func(v rft.Value) error {
 		// 这个函数主要用于统一bop操作中两个元素的类型.
 		var ok bool
@@ -227,7 +227,7 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 		switch v.Kind() {
 		case rft.Array:
 			for i := 0; i < v.Len(); i++ {
-				if err := template(name, tt, tv, bop)(v.Index(i)); err != nil {
+				if err := template(name, strv, tt, tv, bop)(v.Index(i)); err != nil {
 					return err
 				}
 			}
@@ -237,21 +237,34 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 			// 进行类型扩展, 当为(i)default则按照field类型进行转换.
 			if tt == tdefault || tt == tidefault {
 				switch tv.(type) {
+				case uint64:
+					// nothing.
 				case int64:
 					tv = uint64(tv.(int64))
 				case time.Duration:
 					tv = uint64(tv.(time.Duration))
 				case float64:
 					tv = uint64(tv.(float64))
+				default:
+					goto not_match_term
 				}
+
+				if v.OverflowUint(tv.(uint64)) {
+					goto overflow
+				}
+
 			} else {
 				// 这里对v重新赋值, 这里并不要求v具备CanSet,
 				// 因为比较大小不需要这个属性.
 				switch tv.(type) {
+				case uint64:
+					// nothing.
 				case int64, time.Duration:
 					v = rft.ValueOf(int64(v.Uint()))
 				case float64:
 					v = rft.ValueOf(float64(v.Uint()))
+				default:
+					goto not_match_term
 				}
 			}
 			ok = bop(v, tv)
@@ -259,6 +272,8 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 			switch tv.(type) {
 			case uint64:
 				tv = int64(tv.(uint64))
+			case int64:
+				// nothing.
 			case time.Duration:
 				tv = int64(tv.(time.Duration))
 			case float64:
@@ -267,6 +282,12 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 				} else {
 					v = rft.ValueOf(float64(v.Int()))
 				}
+			default:
+				goto not_match_term
+			}
+
+			if (tt == tdefault || tt == tidefault) && v.OverflowInt(tv.(int64)) {
+				goto overflow
 			}
 
 			ok = bop(v, tv)
@@ -278,11 +299,24 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 				tv = float64(tv.(int64))
 			case time.Duration:
 				tv = float64(tv.(time.Duration))
+			case float64:
+				// nothing
+			default:
+				goto not_match_term
 			}
+
+			if (tt == tdefault || tt == tidefault) && v.OverflowFloat(tv.(float64)) {
+				goto overflow
+			}
+
 			ok = bop(v, tv)
 		case rft.Bool, rft.String:
 			if tt == tdefault || tt == tidefault {
-				ok = bop(v, tv)
+				if v.Kind() == rft.String {
+					ok = bop(v, strv)
+				} else {
+					ok = bop(v, tv)
+				}
 				break
 			}
 			fallthrough
@@ -294,6 +328,11 @@ func template(name string, tt termtype, tv interface{}, bop func(rft.Value, inte
 			return fmt.Errorf("%s: can't satisfy term '%s=%v'", name, tt, tv)
 		}
 		return nil
+
+	not_match_term:
+		panic(fmt.Sprintf("%s: value of term '%s=%v' not match %s type", name, tt, tv, v.Kind()))
+	overflow:
+		panic(fmt.Sprintf("%s: value of term '%s=%v' overflow %s", name, tt, tv, v.Kind()))
 	}
 }
 
@@ -335,7 +374,7 @@ func set(x rft.Value, y interface{}) bool {
 		case float64:
 			x.SetFloat(y.(float64))
 		case string:
-			x.SetString(fmt.Sprint(y))
+			x.SetString(y.(string))
 		}
 	}
 	return true

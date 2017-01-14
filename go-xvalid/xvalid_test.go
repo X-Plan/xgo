@@ -118,4 +118,107 @@ func TestNumber(t *testing.T) {
 		Uint uint `xvalid:"min=-10,max=10,default=-2"`
 	}{Uint: 5}
 	xassert.IsNil(t, Validate(&b))
+
+	var c = struct {
+		Int int `xvalid:"min=23,max=1.78e6"`
+	}{Int: 10000000}
+	xassert.Match(t, Validate(&c), "can't satisfy term 'max=.*'")
+
+	var d = struct {
+		Int int `xvalid:"min=999999,max=1000001,default=1ms"`
+	}{}
+	xassert.IsNil(t, Validate(&d))
+
+	var e = struct {
+		Float float32 `xvalid:"noempty"`
+	}{}
+	xassert.Match(t, Validate(&e), `Float: is empty`)
+
+	var f = struct {
+		Float float32 `xvalid:"default=4e40,max=4e39"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&f) }), `term '.*' and term '.*' are contradictory`)
+
+	var g = struct {
+		Uint uint32 `xvalid:"default=4294967296"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&g) }), `value of term '.*' overflow uint32`)
+
+	var h = struct {
+		Uint uint32 `xvalid:"default=4e40"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&h) }), `value of term '.*' overflow uint32`)
+
+	var i = struct {
+		Int int32 `xvalid:"default=2147483648"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&i) }), `value of term '.*' overflow int32`)
+
+	var j = struct {
+		Float float32 `xvalid:"default=4e40"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&j) }), `value of term '.*' overflow float32`)
+
+	var k = struct {
+		Int int64 `xvalid:"default=False"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&k) }), `value of term '.*' not match int64 type`)
+}
+
+func TestString(t *testing.T) {
+	var a = struct {
+		String string `xvalid:"default=TRUE"`
+	}{}
+	xassert.IsNil(t, Validate(&a))
+	xassert.Equal(t, a.String, "TRUE")
+
+	var b = struct {
+		String string `xvalid:"default=10"`
+	}{}
+	xassert.IsNil(t, Validate(&b))
+	xassert.Equal(t, b.String, "10")
+
+	var c = struct {
+		String string `xvalid:"default=-100"`
+	}{}
+	xassert.IsNil(t, Validate(&c))
+	xassert.Equal(t, c.String, "-100")
+
+	var d = struct {
+		String string `xvalid:"default=17.2323e10"`
+	}{}
+	xassert.IsNil(t, Validate(&d))
+	xassert.Equal(t, d.String, "17.2323e10")
+
+	var e = struct {
+		String string `xvalid:"default=10h40m"`
+	}{}
+	xassert.IsNil(t, Validate(&e))
+	xassert.Equal(t, e.String, "10h40m")
+
+	var f = struct {
+		String string `xvalid:"default=/hello world /"`
+	}{}
+	xassert.IsNil(t, Validate(&f))
+	xassert.Equal(t, f.String, "/hello world /")
+
+	var g = struct {
+		String string `xvalid:"min=10"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&g) }), `type can't support 'min' term`)
+
+	var h = struct {
+		String string `xvalid:"max=200.7"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&h) }), `type can't support 'max' term`)
+
+	var i = struct {
+		String string `xvalid:"noempty"`
+	}{}
+	xassert.Match(t, Validate(&i), `is empty`)
+
+	var j = struct {
+		String string `xvalid:"match=/ hello world$/"`
+	}{String: "hello world"}
+	xassert.Match(t, Validate(&j), `not match`)
 }
