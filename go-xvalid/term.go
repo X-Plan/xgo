@@ -51,6 +51,8 @@ func (tms terms) conflictDefMinMax(iprefix string) {
 	var (
 		err           error
 		def, min, max *term
+		at, bt        *term
+		name          string
 	)
 	for _, tm := range tms {
 		switch tm.t.String() {
@@ -64,15 +66,23 @@ func (tms terms) conflictDefMinMax(iprefix string) {
 	}
 
 	if def != nil {
+		defer func() {
+			if v := recover(); v != nil || err != nil {
+				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", name, at, bt))
+			}
+		}()
+
 		// 这里不管是直接版本还是间接版本统一使用直接版本进行验证.
 		if min != nil {
+			name, at, bt = min.name, def, min
 			if err = template(min.name, "", tmin, min.v, greater)(rft.ValueOf(def.v)); err != nil {
-				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", min.name, def, min))
+				return
 			}
 		}
 		if max != nil {
+			name, at, bt = max.name, def, max
 			if err = template(max.name, "", tmax, max.v, less)(rft.ValueOf(def.v)); err != nil {
-				panic(fmt.Sprintf("%s: term '%s' and term '%s' are contradictory", max.name, def, max))
+				return
 			}
 		}
 	}

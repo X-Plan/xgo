@@ -9,6 +9,7 @@ package xvalid
 import (
 	"github.com/X-Plan/xgo/go-xassert"
 	"testing"
+	"time"
 )
 
 // 测试解析阶段.
@@ -221,4 +222,26 @@ func TestString(t *testing.T) {
 		String string `xvalid:"match=/ hello world$/"`
 	}{String: "hello world"}
 	xassert.Match(t, Validate(&j), `not match`)
+
+	var k = struct {
+		String string `xvalid:"min=10,max=200,default=TRUE"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&k) }), `term 'default=true' and term 'min=10' are contradictory`)
+}
+
+func TestDuration(t *testing.T) {
+	var a = struct {
+		Duration time.Duration `xvalid:"min=1s,max=1h,default=1m"`
+	}{}
+	xassert.IsNil(t, Validate(&a))
+
+	var b = struct {
+		Duration time.Duration `xvalid:"min=1s,max=200h,default=hello world"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&b) }), `term 'default=hello world' and term 'min=1s' are contradictory`)
+
+	var c = struct {
+		Duration time.Duration `xvalid:"min=21h12m31s,max=39h12s"`
+	}{Duration: 20 * time.Hour}
+	xassert.Match(t, Validate(&c), "can't satisfy term 'min=.*'")
 }
