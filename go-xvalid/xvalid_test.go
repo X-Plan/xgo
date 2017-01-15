@@ -289,3 +289,10 @@ func TestArray(t *testing.T) {
 	}{Array: [8]int{0, 0, 0, 1}}
 	xassert.IsNil(t, Validate(&f))
 }
+
+func TestPointer(t *testing.T) {
+	var a = struct {
+		Pointer *int `xvalid:"noempty"`
+	}{}
+	xassert.Match(t, Validate(&a), `Pointer: is empty`)
+}
