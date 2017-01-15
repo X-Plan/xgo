@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-14
+// 修订日期: 2017-01-15
 package xvalid
 
 import (
@@ -214,7 +214,7 @@ func match(name string, tv interface{}) func(rft.Value) error {
 		switch v.Kind() {
 		case rft.Array:
 			for i := 0; i < v.Len(); i++ {
-				if err := match(name, tv)(v.Index(i)); err != nil {
+				if err := match(name+istr(i), tv)(v.Index(i)); err != nil {
 					return err
 				}
 			}
@@ -237,7 +237,7 @@ func template(name string, strv string, tt termtype, tv interface{}, bop func(rf
 		switch v.Kind() {
 		case rft.Array:
 			for i := 0; i < v.Len(); i++ {
-				if err := template(name, strv, tt, tv, bop)(v.Index(i)); err != nil {
+				if err := template(name+istr(i), strv, tt, tv, bop)(v.Index(i)); err != nil {
 					return err
 				}
 			}
@@ -485,4 +485,9 @@ func iszero(v rft.Value) bool {
 	}
 
 	return z
+}
+
+// 生成下标形式的字符串.
+func istr(i int) string {
+	return fmt.Sprintf("[%d]", i)
 }

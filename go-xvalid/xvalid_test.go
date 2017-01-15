@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-14
+// 修订日期: 2017-01-15
 package xvalid
 
 import (
@@ -244,4 +244,48 @@ func TestDuration(t *testing.T) {
 		Duration time.Duration `xvalid:"min=21h12m31s,max=39h12s"`
 	}{Duration: 20 * time.Hour}
 	xassert.Match(t, Validate(&c), "can't satisfy term 'min=.*'")
+}
+
+func TestArray(t *testing.T) {
+	var a = struct {
+		Array [8]string `xvalid:"min=100"`
+	}{}
+	xassert.Match(t, cpanic(func() { Validate(&a) }), `Array\[0\]: string type can't support 'min' term`)
+
+	var b = struct {
+		Array [8]int `xvalid:"min=10,default=17.2"`
+	}{Array: [8]int{13}}
+	xassert.IsNil(t, Validate(&b))
+	for i, v := range b.Array {
+		if i == 0 {
+			xassert.Equal(t, v, 13)
+		} else {
+			xassert.Equal(t, v, 17)
+		}
+	}
+
+	var c = struct {
+		Array [8]int `xvalid:"min=15.2,default=20.2"`
+	}{Array: [8]int{0, 0, 0, 13}}
+	xassert.Match(t, Validate(&c), `Array\[3\]: can't satisfy term 'min=15.2'`)
+
+	var d = struct {
+		Array [8]string `xvalid:"match=/hello[[:space:]]+world/"`
+	}{Array: [8]string{"hello world", "hello  world", "helloworld"}}
+	xassert.Match(t, Validate(&d), `Array\[2\]: 'helloworld' not match '.*'`)
+
+	var e = struct {
+		Array [8][8]string `xvalid:"match=/hello[[:space:]]+world/,default=hello world"`
+	}{Array: [8][8]string{
+		[8]string{},
+		[8]string{},
+		[8]string{},
+		[8]string{"hello world", "hello  world", "helloworld"},
+	}}
+	xassert.Match(t, Validate(&e), `Array\[3\]\[2\]: 'helloworld' not match '.*'`)
+
+	var f = struct {
+		Array [8]int `xvalid:"noempty"`
+	}{Array: [8]int{0, 0, 0, 1}}
+	xassert.IsNil(t, Validate(&f))
 }
