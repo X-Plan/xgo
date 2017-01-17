@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-15
+// 修订日期: 2017-01-17
 package xvalid
 
 import (
@@ -391,20 +391,36 @@ func set(x rft.Value, y interface{}) bool {
 }
 
 func indirect(name string, tt termtype, check func(rft.Value) error) func(rft.Value) error {
-	return func(v rft.Value) error {
+	return func(v rft.Value) (err error) {
+		var (
+			panicflag bool
+		)
+
+		defer func() {
+			if v := recover(); v != nil {
+				panic(fmt.Sprintf("%s%s", name, v))
+			}
+
+			if panicflag {
+				panic(fmt.Sprintf("%s: %v type can't support '%s' term", name, v.Kind(), tt))
+			}
+		}()
+
 		// 间接版本只针对Pointer, Interface, Slice, Map.
 		switch v.Kind() {
 		case rft.Ptr, rft.Interface:
 			if !v.IsNil() {
-				if err := check(v.Elem()); err != nil {
-					return fmt.Errorf("*(%s)%s", name, err)
+				if err = check(v.Elem()); err != nil {
+					err = fmt.Errorf("*(%s)%s", name, err)
+					return
 				}
 			}
 		case rft.Slice:
 			for i := 0; i < v.Len(); i++ {
 				if sv := v.Index(i); sv.CanAddr() {
-					if err := check(sv); err != nil {
-						return fmt.Errorf("%s[%v]%s", name, i, err)
+					if err = check(sv); err != nil {
+						err = fmt.Errorf("%s[%v]%s", name, i, err)
+						return
 					}
 				}
 			}
@@ -413,15 +429,16 @@ func indirect(name string, tt termtype, check func(rft.Value) error) func(rft.Va
 				org := v.MapIndex(key)
 				sv := rft.New(org.Type()).Elem()
 				sv.Set(org)
-				if err := check(sv); err != nil {
-					return fmt.Errorf("%s[%v]%s", name, key, err)
+				if err = check(sv); err != nil {
+					err = fmt.Errorf("%s[%v]%s", name, key, err)
+					return
 				}
 				v.SetMapIndex(key, sv)
 			}
 		default:
-			panic(fmt.Sprintf("%s: %v type can't support '%s' term", name, v.Kind(), tt))
+			panicflag = true
 		}
-		return nil
+		return
 	}
 }
 

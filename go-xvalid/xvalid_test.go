@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-15
+// 修订日期: 2017-01-17
 package xvalid
 
 import (
@@ -295,4 +295,85 @@ func TestPointer(t *testing.T) {
 		Pointer *int `xvalid:"noempty"`
 	}{}
 	xassert.Match(t, Validate(&a), `Pointer: is empty`)
+}
+
+type joke struct {
+	ignore string         `xvalid:"hello"`
+	Array  [3]string      `xvalid:"default=world"`
+	Map    map[string]int `xvalid:"imin=12.7"`
+}
+
+func TestIndirect(t *testing.T) {
+	var a = struct {
+		Bool   *bool          `xvalid:"idefault=true"`
+		Int    *int           `xvalid:"idefault=12"`
+		Float  *float64       `xvalid:"idefault=19"`
+		String *string        `xvalid:"idefault=hello world"`
+		Array  *[3]string     `xvalid:"idefault=who are you?"`
+		Slice  []uint32       `xvalid:"idefault=10"`
+		Map    map[string]int `xvalid:"imax=300"`
+	}{
+		Bool:   new(bool),
+		Int:    new(int),
+		Float:  new(float64),
+		String: new(string),
+		Array:  new([3]string),
+		Slice:  make([]uint32, 10),
+		Map:    map[string]int{"hello": 100, "world": 400},
+	}
+	xassert.Match(t, Validate(&a), `Map\[world\]: can't satisfy term 'imax=300'`)
+	xassert.IsTrue(t, *a.Bool)
+	xassert.Equal(t, *a.Int, 12)
+	xassert.Equal(t, *a.Float, float64(19))
+	xassert.Equal(t, *a.String, "hello world")
+	for _, v := range *a.Array {
+		xassert.Equal(t, v, "who are you?")
+	}
+	for _, v := range a.Slice {
+		xassert.Equal(t, v, uint32(10))
+	}
+
+	var tmpSlice = make([]string, 10)
+	var b = struct {
+		Slice *[]string `xvalid:"idefault=hello"`
+	}{
+		Slice: &tmpSlice,
+	}
+	xassert.Match(t, cpanic(func() { Validate(&b) }), `Slice: slice type can't support 'idefault' term`)
+
+	var tmpMap = make(map[string]int)
+	var c = struct {
+		Map *map[string]int `xvalid:"imax=10"`
+	}{
+		Map: &tmpMap,
+	}
+	xassert.Match(t, cpanic(func() { Validate(&c) }), `Map: map type can't support 'imax' term`)
+
+	var d = struct {
+		Struct *struct {
+			Foo string `xvalid:"noempty"`
+		}
+	}{Struct: nil}
+	xassert.IsNil(t, Validate(&d))
+
+	var e = struct {
+		Int   *int             `xvalid:"imin=100"`
+		Dummy map[string]*joke `xvalid:"noempty,inoempty"`
+	}{
+		Dummy: map[string]*joke{
+			"foo": &joke{},
+			"bar": &joke{
+				Map: map[string]int{"hello": 13, "world": 12},
+			},
+		},
+	}
+	xassert.Match(t, Validate(&e), `Dummy\[bar\].Map\[world\]: can't satisfy term 'imin=12.7'`)
+
+	var f = make([]joke, 10)
+	f[5].Map = map[string]int{"kkk": 10}
+	xassert.Match(t, Validate(&f), `\[5\].Map\[kkk\]: can't satisfy term 'imin=12.7'`)
+
+	var g = make(map[float64]joke)
+	g[3.3] = joke{Map: map[string]int{"bbb": 9}}
+	xassert.Match(t, Validate(&g), `\[3\.3\]\.Map\[bbb\]: can't satisfy term 'imin=12.7'`)
 }

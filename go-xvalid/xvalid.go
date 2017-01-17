@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-12
+// 修订日期: 2017-01-17
 
 // go-xvalid是一个对配置参数进行合法性校验的工具包.
 package xvalid
