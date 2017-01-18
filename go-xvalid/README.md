@@ -4,6 +4,43 @@
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
+**go-xvalid**是一个对配置信息合法性进行校验的[Golang][Go]工具包. 它通过对需要检查的字段设定*xvalid tag*.   
+提供一系列的限制条件(称为*term*), 来判断配置信息的合法性. 例子如下:
+
+```go
+
+	
+
+	type Person struct {
+		Name string `xvalid:"noempty"`
+		Age  int `xvalid:"min=1,max=200"`
+		Tel  []string `xvalid:"imatch=/^[[:digit:]]{2,3}-[[:digit:]]+"`
+		Friends []*Person `xvalid:"inoempty"`
+	}
+	
+	p := &Person {
+		Name: "blinklv",
+		Age: 20,
+		Tel: []string {
+			"086-123456789",
+			"079-123456789",
+		},
+		Friends []*Person {
+			Name: "luna",
+			Age: 21,
+			Tel: []string{ "086-11111111"},
+		},
+	}
+	if err = xvalid.Validate(&p); err != nil {
+		// 处理错误.
+	}
+
+```
+
+**Validate**函数的参数必须是*pointer*, *interface*, *map*, *slice*, *array*之一. 一般情况下是指向   
+*struct*类型的指针, 如上例所示. 如果*struct*中的字段名为小写或者没有*xvalid tag*, **Validate**则会忽略  
+该字段.
+
 
 ## xvalid tag
 `xvalid` tag用于配置合法性校验信息, 一个`xvalid` tag由一系列**term**组成.  
@@ -50,37 +87,37 @@
 
 ``` go
 
-    type Foo struct {
-        A *string `xvalid:"inoempty"`
-    }
-    
-    f1 := &Foo{ A: nil }
-    str := ""
-    f2 := &Foo{ A: &str }
-    
+	type Foo struct {
+		A *string `xvalid:"inoempty"`
+	}
+	
+	f1 := &Foo{ A: nil }
+	str := ""
+	f2 := &Foo{ A: &str }
+	
 ```
 
 
-`f1`不会被**inoempty**限定, 因为`f1.A`为**nil**, 但是`f2`则会被其限定.  再比如:    
+`f1`不会被**inoempty**限定, 因为`f1.A`为**nil**, 但是`f2`则会被其限定.  再比如:	
 
 ``` go
 
-    type Foo struct {
-        A [3]int `xvalid:"idefault=10"`
-    }
-    
-    type Bar struct {
-        A *[3]int `xvalid:"idefault=10"`
-    }
+	type Foo struct {
+		A [3]int `xvalid:"idefault=10"`
+	}
+	
+	type Bar struct {
+		A *[3]int `xvalid:"idefault=10"`
+	}
 
-    f := &Foo{}
-    Validate(f)
-    
-    b := &Bar{}
-    Validate(b)
+	f := &Foo{}
+	Validate(f)
+	
+	b := &Bar{}
+	Validate(b)
 
-    b.A = &[3]int{}
-    Validate(b)
+	b.A = &[3]int{}
+	Validate(b)
 ```
 
 `Validate(f)`会导致程序panic, 因为**idefault**只能作用于间接类型. 第一次调用`Validate(b)`没有任何效果,  
@@ -101,6 +138,51 @@
 	  space = [{ white space }] ;
 	  white space = ? white space characters (include CRLF and TAB) ?;
 	  character = ? all visible characters ?;
+	 
+## 关于类型转换
+**go-xvalid**在解释**default**, **min**, **max**, **idefault**, **imin**, **imax**这些**term**时, 对其类型的界定顺序是: 
+
+1. *bool* (只针对**default**, **idefault**)
+2. *uint64*
+3. *int64*
+4. *float64*
+5. *time.Duration*
+6. *string*
+
+只有在值为*true*, *false*, *True*, *False*, *TRUE*, *FALSE*才会被判定为*bool*类型. 如果值大于等于0则判定为*uint64*,  
+负整数判定为*int64*, 带有小数点判定为*float64*, 数字开头, 以`ns`,`us`,`ms`,`s`,`m`,`h`为后缀结尾会被判定为*time.Duration*.  
+最后一律被判定为*string*. 这样就存在**term**的类型和实际的**field**的类型不匹配的情况. 以下情况是合理的:  
+
+```go
+
+	type Foo struct {
+		A uint8 `xvalid:"default=128"`
+		B uint16 `xvalid:"max=123456789"`
+		C int32 `xvalid:"min=-1234567"`
+		D float64 `xvalid:"default=-123.4567"`
+		F bool `xvalid:"default=True"`
+		G string `xvalid:"default=123456789"`
+		H time.Duration `xvalid:"default=20h"`
+	}
+	
+```
+
+注意`G`中的**default**虽然会被判定为*uint64*, 但是在设定`G`的值时又会被转换为*string*, 这是*string*类型特殊之处.
+
+但是如下情况是存在问题的:
+
+```go
+
+	type Foo struct {
+		A uint8 `xvalid:"default=1234567"`	   // 溢出
+		B int64 `xvalid:"default=40e40"	`      // 40e40超出了int64容纳空间, 因此B的值时未知的
+		C int8  `xvalid:"default=string"`	   // 字符串不能赋值个int8
+	}
+
+
+```
+
 
 [RE2]: https://golang.org/pkg/regexp/syntax/#hdr-Syntax
+[Go]: https://golang.org
 
