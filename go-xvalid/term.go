@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-17
+// 修订日期: 2017-01-19
 package xvalid
 
 import (
@@ -112,13 +112,13 @@ func (tms *terms) Swap(i, j int) {
 func newTerms(name, tag string) terms {
 	var (
 		tms []*term
-		ts  = strings.Split(strings.TrimSpace(tag), ",")
+		ts  = strings.Split(strings.Replace(strings.TrimSpace(tag), `\,`, "COMMA", -1), ",")
 		m   = make(map[string]string)
 	)
 
 	for _, t := range ts {
 		var (
-			pair        = strings.SplitN(strings.TrimSpace(t), "=", 2)
+			pair        = strings.SplitN(strings.Replace(strings.TrimSpace(t), "COMMA", ",", -1), "=", 2)
 			k, v string = strings.TrimSpace(pair[0]), ""
 		)
 
@@ -164,7 +164,7 @@ func newTerm(name, k, v string) *term {
 		}
 	case "noempty", "inoempty":
 		if !isspace(v) {
-			panic(fmt.Sprintf("%s: invalid term 'noempty=%s'", name, v))
+			panic(fmt.Sprintf("%s: invalid term '%s=%s'", name, k, v))
 		}
 		tm.t, tm.check, tm.name = tnoempty, noempty(name), name
 		if k == "inoempty" {
@@ -184,7 +184,7 @@ func newTerm(name, k, v string) *term {
 		}
 	case "match", "imatch":
 		if len(v) < 2 || v[0] != '/' || v[len(v)-1] != '/' {
-			panic(fmt.Sprintf("%s: invalid term 'match=%s'", name, v))
+			panic(fmt.Sprintf("%s: invalid term '%s=%s'", name, k, v))
 		}
 		tm.t, tm.v, tm.name = tmatch, regexp.MustCompile(v[1:len(v)-1]), name
 		tm.check = match(name, tm.v)

@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-17
+// 修订日期: 2017-01-19
 package xvalid
 
 import (
@@ -376,4 +376,82 @@ func TestIndirect(t *testing.T) {
 	var g = make(map[float64]joke)
 	g[3.3] = joke{Map: map[string]int{"bbb": 9}}
 	xassert.Match(t, Validate(&g), `\[3\.3\]\.Map\[bbb\]: can't satisfy term 'imin=12.7'`)
+}
+
+type person struct {
+	Name    string    `xvalid:"noempty"`
+	Age     int       `xvalid:"min=1,max=200"`
+	Tel     []string  `xvalid:"imatch=/^[[:digit:]]{2\,3}-[[:digit:]]+$/"`
+	Friends []*person `xvalid:"inoempty"`
+}
+
+type foo struct {
+	A *string `xvalid:"inoempty"`
+}
+
+type foo1 struct {
+	A [3]int `xvalid:"idefault=10"`
+}
+
+type bar struct {
+	A *[3]int `xvalid:"idefault=10"`
+}
+
+type foo2 struct {
+	A uint8         `xvalid:"default=128"`
+	B uint16        `xvalid:"max=123456789"`
+	C int32         `xvalid:"min=-1234567"`
+	D float64       `xvalid:"default=-123.4567"`
+	F bool          `xvalid:"default=True"`
+	G string        `xvalid:"default=123456789"`
+	H time.Duration `xvalid:"default=20h"`
+}
+
+type foo3 struct {
+	A uint8 `xvalid:"default=1234567"` // 溢出
+	B int64 `xvalid:"default=40e40"	`  // 40e40超出了int64容纳空间, 因此B的值时未知的
+	C int8  `xvalid:"default=string"`  // 字符串不能赋值个int8
+}
+
+func TestExample(t *testing.T) {
+	p := &person{
+		Name: "blinklv",
+		Age:  20,
+		Tel: []string{
+			"086-123456789",
+			"079-123456789",
+		},
+		Friends: []*person{
+			&person{
+				Name: "luna",
+				Age:  21,
+				Tel:  []string{"086-11111111"},
+			},
+		},
+	}
+	xassert.IsNil(t, Validate(&p))
+
+	f1 := &foo{A: nil}
+	xassert.IsNil(t, Validate(&f1))
+	str := ""
+	f2 := &foo{A: &str}
+	xassert.NotNil(t, Validate(&f2))
+
+	f := &foo1{}
+	xassert.NotNil(t, cpanic(func() { Validate(f) }))
+
+	b := &bar{}
+	xassert.IsNil(t, Validate(b))
+
+	b.A = &[3]int{}
+	xassert.IsNil(t, Validate(b))
+	for _, v := range *(b.A) {
+		xassert.Equal(t, v, 10)
+	}
+
+	c := &foo2{}
+	xassert.IsNil(t, Validate(c))
+
+	d := &foo3{}
+	xassert.NotNil(t, cpanic(func() { Validate(d) }))
 }

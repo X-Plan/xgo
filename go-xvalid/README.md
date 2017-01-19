@@ -1,6 +1,6 @@
 #go-xvalid
 
-![Building](https://img.shields.io/badge/building-devel-blue.svg)
+![Building](https://img.shields.io/badge/building-passing-green.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
@@ -14,7 +14,7 @@
 	type Person struct {
 		Name string `xvalid:"noempty"`
 		Age  int `xvalid:"min=1,max=200"`
-		Tel  []string `xvalid:"imatch=/^[[:digit:]]{2,3}-[[:digit:]]+"`
+		Tel  []string `xvalid:"imatch=/^[[:digit:]]{2\,3}-[[:digit:]]+"`
 		Friends []*Person `xvalid:"inoempty"`
 	}
 	
@@ -25,13 +25,13 @@
 			"086-123456789",
 			"079-123456789",
 		},
-		Friends []*Person {
+		Friends: []*Person {
 			Name: "luna",
 			Age: 21,
 			Tel: []string{ "086-11111111"},
 		},
 	}
-	if err = xvalid.Validate(&p); err != nil {
+	if err := xvalid.Validate(&p); err != nil {
 		// 处理错误.
 	}
 
@@ -39,7 +39,8 @@
 
 **Validate**函数的参数必须是*pointer*, *interface*, *map*, *slice*, *array*之一. 一般情况下是指向   
 *struct*类型的指针, 如上例所示. 如果*struct*中的字段名为小写或者没有*xvalid tag*, **Validate**则会忽略  
-该字段.
+该字段.  
+**NOTE**: `,`是**term**的分隔符, 因此当term本身需要包含`,`时应该对其进行转义, 使用`\,`.
 
 
 ## xvalid tag

@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-08
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-11
+// 修订日期: 2017-01-19
 package xvalid
 
 import (
@@ -23,7 +23,7 @@ func TestNewTerm(t *testing.T) {
 func testNewTerm(iprefix string, t *testing.T) {
 	xassert.IsNil(t, cpanic(func() { newTerm("test", iprefix+"noempty", "") }))
 	xassert.IsNil(t, cpanic(func() { newTerm("test", iprefix+"noempty", "\n\t \t\n\r\v") }))
-	xassert.Match(t, cpanic(func() { newTerm("test", iprefix+"noempty", "hello") }), `invalid term 'noempty=.*'`)
+	xassert.Match(t, cpanic(func() { newTerm("test", iprefix+"noempty", "hello") }), `invalid term '`+iprefix+`noempty=.*'`)
 	xassert.Match(t, cpanic(func() { newTerm("test", iprefix+"min", "true") }), `invalid term 'min=true'`)
 	xassert.Match(t, cpanic(func() { newTerm("test", iprefix+"max", "FALSE") }), `invalid term 'max=FALSE'`)
 	xassert.IsNil(t, cpanic(func() { newTerm("test", iprefix+"default", "True") }))
