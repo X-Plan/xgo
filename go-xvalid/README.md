@@ -37,9 +37,8 @@
 
 ```
 
-**Validate**函数的参数必须是*pointer*, *interface*, *map*, *slice*, *array*之一. 一般情况下是指向   
-*struct*类型的指针, 如上例所示. 如果*struct*中的字段名为小写或者没有*xvalid tag*, **Validate**则会忽略  
-该字段.  
+**Validate**函数的参数必须是*pointer*, *interface*, *map*, *slice*, *array*之一. 一般情况下是指向 *struct*类型的指针,    
+如上例所示. 如果*struct*中的字段名为小写或者没有*xvalid tag*, **Validate**则会忽略该字段.  
 **NOTE**: `,`是**term**的分隔符, 因此当term本身需要包含`,`时应该对其进行转义, 使用`\,`.
 
 
