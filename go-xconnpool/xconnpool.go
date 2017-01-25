@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// 修订日期: 2017-01-25
 
 // go-xconnpool实现了一个并发安全的连接池, 该连接池
 // 可以用来管理和重用连接, 由该连接池产生的连接满足
@@ -13,51 +13,67 @@ package xconnpool
 import (
 	"errors"
 	"net"
+	"sync"
 )
 
 // 版本信息
-var Version = "1.1.0"
+var Version = "1.2.0"
 
 // 如果连接池已经关闭却还对其进行操作
 // 会抛出该错误.
 var ErrClosed = errors.New("XConnPool has been closed")
 
+var ErrXConnClosed = errors.New("XConn has been cloesd")
+
 var ErrXConnIsNil = errors.New("XConn is nil")
 
-// XConn是net.Conn的一个具体实现.XConn并不是并
-// 发安全的对象, 因此你不应该将XConn置于并发环
-// 境下使用.
+// XConn是net.Conn的一个具体实现.
 type XConn struct {
 	net.Conn
-	xcp   *XConnPool
-	unuse bool
+	xcp    *XConnPool
+	unuse  bool
+	closed bool
+	mtx    sync.Mutex
 }
 
 // 每一个XConn都会与一个特定的XConnPool相关联.
 // XConn的关闭操作不是简单的释放连接, 而是有
-// 选择的将连接归还到XConnPool进行重用. 如果
-// 一个XConn已经关闭, 对应的net.Conn会被置为
-// nil, 因此你不应该继续使用该XConn.
+// 选择的将连接归还到XConnPool进行重用. 对于
+// 已经成功关闭的连接再次调用Close(), Release()
+// 函数都会返回ErrXConnClosed.
 func (xc *XConn) Close() error {
-	var (
-		err error
-	)
+	xc.mtx.Lock()
+	defer xc.mtx.Unlock()
 
-	// 如果确定不再使用, 则释放原生连接.
-	if xc.unuse {
-		if xc.Conn != nil {
-			err = xc.Conn.Close()
-			xc.Conn = nil
+	if !xc.closed {
+		if xc.unuse {
+			if err := xc.Conn.Close(); err != nil {
+				return err
+			}
+		} else if err := xc.xcp.put(xc.Conn); err != nil {
 			return err
 		}
-		return ErrXConnIsNil
+		xc.closed = true
+		return nil
 	}
-	// 将原生连接归还到连接池.
-	err = xc.xcp.put(xc.Conn)
-	// 将连接置为空, 避免对XConn的
-	// 重复Close.
-	xc.Conn = nil
-	return err
+
+	return ErrXConnClosed
+}
+
+// 绕过连接池, 直接释放连接. 对于已经成功释放的连接再次
+// 调用Close(), Release()函数都会返回ErrXConnClosed.
+func (xc *XConn) Release() error {
+	xc.mtx.Lock()
+	defer xc.mtx.Lock()
+
+	if !xc.closed {
+		if err := xc.Conn.Close(); err != nil {
+			return err
+		}
+		xc.closed = true
+		return nil
+	}
+	return ErrXConnClosed
 }
 
 // 将连接标记为不再使用, 在这种情况下XConn的
@@ -65,9 +81,13 @@ func (xc *XConn) Close() error {
 // 的将其释放掉. 因为连接池本身的意义就是避免
 // 连接的过度创建与释放, 并且多余的连接会在
 // Close中被释放掉, 所以大部分情况下你不会使
-// 用该函数.
+// 用该函数. 但是当连接不可用的时候, 你可以
+// 调用该函数, 然后再Close. 当然直接调用Release
+// 是一个更好的选择.
 func (xc *XConn) Unuse() {
+	xc.mtx.Lock()
 	xc.unuse = true
+	xc.mtx.Unlock()
 }
 
 // Factory是一个用来生成连接的工厂函数类型.
@@ -131,10 +151,18 @@ func (xcp *XConnPool) Get() (net.Conn, error) {
 	return xcp.wrapConn(conn), nil
 }
 
+// 绕过已有的连接池, 直接调用factory创建新的连接.
+func (xcp *XConnPool) RawGet() (net.Conn, error) {
+	if conn, err := xcp.factory(); err != nil {
+		return nil, err
+	} else {
+		return xcp.wrapConn(conn), nil
+	}
+}
+
 // 将net.Conn封装成XConn.
 func (xcp *XConnPool) wrapConn(conn net.Conn) net.Conn {
-	xc := &XConn{xcp: xcp}
-	xc.Conn = conn
+	xc := &XConn{Conn: conn, xcp: xcp}
 	return xc
 }
 
