@@ -1,7 +1,7 @@
 #go-xconnpool
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **go-xconnpool**包实现了一个并发安全的连接池, 它可以用来管理和重用连接.  
@@ -9,7 +9,7 @@
 
 * **XConn**: XConn一个net.Conn接口的具体实现, 它将已有的连接进行了一层简单的封装.  
 每个XConn都与一个特定的XConnPool关联, 其Close操作不是简单的释放连接, 而是有  
-选择的将连接归还到对应的连接池.(**注意**: XConn不是并发安全对象)
+选择的将连接归还到对应的连接池.
 * **XConnPool**: XConnPool是一个XConn的连接池. 为了实现并发安全, 它在实现上用到了  
 Go的原生Channel.
 

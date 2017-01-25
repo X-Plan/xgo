@@ -17,7 +17,7 @@ import (
 )
 
 // 版本信息
-var Version = "1.2.0"
+var Version = "1.2.0-alpha"
 
 // 如果连接池已经关闭却还对其进行操作
 // 会抛出该错误.
