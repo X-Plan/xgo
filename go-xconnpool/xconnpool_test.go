@@ -3,55 +3,137 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-15
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// 修订日期: 2017-01-25
 package xconnpool
 
 import (
+	"context"
+	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"github.com/X-Plan/xgo/go-xpacket"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
-// 测试对panic的捕获.
-func TestPanic(t *testing.T) {
-	// 需要先开启server
-	xcp := New(10, func() (net.Conn, error) {
-		return net.Dial("tcp", "127.0.0.1:8000")
-	})
-	xassert.NotNil(t, xcp)
+func setupClient(capacity, count, n int, addrList []string) error {
+	var (
+		err   error
+		conn  net.Conn
+		index int64
+		xcp   = New(capacity, func() (net.Conn, error) {
+			return net.Dial("tcp", addrList[atomic.AddInt64(&index, 1)%len(addrList)])
+		})
+	)
+	defer xcp.Close()
 
-	// 测试XConn的重复关闭.
-	conn, err := xcp.Get()
-	xassert.IsNil(t, err)
+	for i := 0; i < count; i++ {
+		if n == 0 {
+			fmt.Printf("[client] Game Over?\n")
+			break
+		}
 
-	xassert.IsNil(t, conn.Close())
-	xassert.Equal(t, ErrXConnIsNil, conn.Close())
+		if conn, err = xcp.Get(); err != nil {
+			fmt.Printf("[client] get connection failed (%s)\n", err)
+			n--
+			continue
+		}
 
-	conn, err = xcp.Get()
-	xassert.IsNil(t, err)
-	xc := conn.(*XConn)
-	xc.Unuse()
+	again:
+		if err = xpacket.Encode(conn, []byte(fmt.Sprintf("message %d", i))); err != nil {
+			err = conn.(*xconnpool.XConn).Release()
+			fmt.Printf("[client] write message %d failed, release connection (%s)\n", err)
+			if conn, err = xcp.RawGet(); err != nil {
+				fmt.Printf("[client] (raw) get connection failed (%s)\n", err)
+				n--
+				continue
+			}
+			goto again
+		}
+		conn.Close()
+	}
+}
 
-	xassert.IsNil(t, conn.Close())
-	xassert.Equal(t, ErrXConnIsNil, conn.Close())
+func setupServer(n int, lifetime time.Duration) ([]string, error) {
+	var (
+		addrList = make([]string, 0, n)
+		ls       = make([]net.Listener, 0, n)
+		l        net.Listener
+		err      error
+	)
 
-	// 测试XConnPool的重复关闭.
-	conn, err = xcp.Get()
-	xassert.IsNil(t, err)
+	for i := 0; i < n; i++ {
+		if l, err = net.Listen("0.0.0.0:0"); err != nil {
+			return nil, err
+		}
+		ls = append(ls, l)
+		addrList = append(addrList, l.Addr().String())
+	}
 
-	// 关闭连接池.
-	err = xcp.Close()
-	xassert.IsNil(t, err)
+	for i, l = range ls {
+		go server(l, lifetime, i+1)
+	}
 
-	// 如下的两个操作都会触发
-	// panic, 但是现在转换为
-	// 错误返回.
+	return addrList
+}
 
-	// 重复关闭.
-	err = xcp.Close()
-	xassert.Equal(t, ErrClosed, err)
+func server(l net.Listener, lifetime time.Duration, sid int) {
+	var (
+		wg          = &sync.WaitGroup{}
+		ctx, cancel = context.WithTimeout(context.TODO(), lifetime)
+		cid         int
+	)
 
-	// 归还连接到已经关闭的连接池.
-	err = conn.Close()
-	xassert.Equal(t, ErrClosed, err)
+	go func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			l.Close()
+		}
+	}(ctx)
+
+	for {
+		if conn, err := l.Accept(); err != nil {
+			break
+		}
+		cid++
+
+		wg.Add(1)
+		go func() {
+			handle(ctx, conn, sid, cid)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+	fmt.Printf("[server %d] timeout exit (%s)", sid, lifetime)
+	cancel()
+}
+
+func handle(ctx context.Context, conn net.Conn, sid, cid int) {
+	var (
+		data []byte
+		err  error
+	)
+	fmt.Printf("[server: %d][connection: %d] accept connection\n", sid, cid)
+
+	for {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+			fmt.Printf("[server: %d][connection: %d] timeout exit\n", sid, cid)
+			return
+		default:
+			if data, err = xpacket.Decode(conn); err != nil {
+				fmt.Printf("[server: %d][connection: %d] exit (%s)\n", sid, cid, err)
+				return
+			}
+
+			if err = xpacket.Encode(conn, data); err != nil {
+				fmt.Printf("[server: %d][connection: %d] exit (%s)\n", sid, cid, err)
+				return
+			}
+		}
+	}
 }
