@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-15
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-25
+// 修订日期: 2017-01-27
 package xconnpool
 
 import (
@@ -18,71 +18,193 @@ import (
 	"time"
 )
 
-func setupClient(capacity, count, n int, addrList []string) error {
+func TestDuplicateClose(t *testing.T) {
+	addrList, err, _ := setupServer(1, 1*time.Second, 5*time.Second)
+	xassert.IsNil(t, err)
+	xcp := New(10, func() (net.Conn, error) {
+		return net.Dial("tcp", addrList[0])
+	})
+	conn, err := xcp.Get()
+	xassert.IsNil(t, err)
+	xassert.IsNil(t, conn.Close())
+	xassert.Equal(t, conn.Close(), ErrXConnClosed)
+	xassert.Equal(t, conn.(*XConn).Release(), ErrXConnClosed)
+
+	conn, err = xcp.Get()
+	xassert.IsNil(t, err)
+	xassert.IsNil(t, conn.(*XConn).Release(), ErrXConnClosed)
+	xassert.Equal(t, conn.Close(), ErrXConnClosed)
+	xassert.Equal(t, conn.(*XConn).Release(), ErrXConnClosed)
+}
+
+func TestUnuse(t *testing.T) {
+	addrList, err, wg := setupServer(1, 1*time.Second, 5*time.Second)
+	xassert.IsNil(t, err)
+	xcp := New(1, func() (net.Conn, error) {
+		return net.Dial("tcp", addrList[0])
+	})
+
+	conn1, err := xcp.Get()
+	xassert.IsNil(t, err)
+	xassert.IsNil(t, conn1.Close())
+
+	conn2, err := xcp.Get()
+	xassert.IsNil(t, err)
+	conn2.(*XConn).Unuse()
+	xassert.IsNil(t, conn2.Close())
+
+	conn3, err := xcp.Get()
+	xassert.IsNil(t, err)
+	xassert.IsNil(t, conn3.(*XConn).Release())
+
+	wg.Wait()
+}
+
+func Test1(t *testing.T) {
+	addrList, err, wg := setupServer(5, time.Second, 50*time.Second)
+	xassert.IsNil(t, err)
+	setupClient(10, 100, 5, 200*time.Millisecond, addrList)
+	wg.Wait()
+}
+
+func Test2(t *testing.T) {
+	addrList, err, wg := setupServer(3, 2*time.Second, 50*time.Second)
+	xassert.IsNil(t, err)
+	setupClient(10, 100, 5, 200*time.Millisecond, addrList)
+	wg.Wait()
+}
+
+func Test3(t *testing.T) {
+	addrList, err, wg := setupServer(5, 2*time.Second, 10*time.Second)
+	xassert.IsNil(t, err)
+	setupClient(10, 200, 5, 100*time.Millisecond, addrList)
+	wg.Wait()
+}
+
+func Test4(t *testing.T) {
+	addrList1, err, wg1 := setupServer(3, 2*time.Second, 10*time.Second)
+	xassert.IsNil(t, err)
+	addrList2, err, wg2 := setupServer(2, 2*time.Second, 30*time.Second)
+	xassert.IsNil(t, err)
+	setupClient(10, 200, 5, 100*time.Millisecond, append(addrList1, addrList2...))
+	wg1.Wait()
+	wg2.Wait()
+}
+
+func setupClient(capacity, count, n int, interval time.Duration, addrList []string) error {
 	var (
-		err   error
-		conn  net.Conn
-		index int64
-		xcp   = New(capacity, func() (net.Conn, error) {
-			return net.Dial("tcp", addrList[atomic.AddInt64(&index, 1)%len(addrList)])
+		index   int64
+		success int64
+		wg      = &sync.WaitGroup{}
+		xcp     = New(capacity, func() (net.Conn, error) {
+			return net.Dial("tcp", addrList[int(atomic.AddInt64(&index, int64(1)))%len(addrList)])
 		})
 	)
 	defer xcp.Close()
 
 	for i := 0; i < count; i++ {
-		if n == 0 {
-			fmt.Printf("[client] Game Over?\n")
-			break
-		}
-
-		if conn, err = xcp.Get(); err != nil {
-			fmt.Printf("[client] get connection failed (%s)\n", err)
-			n--
-			continue
-		}
-
-	again:
-		if err = xpacket.Encode(conn, []byte(fmt.Sprintf("message %d", i))); err != nil {
-			err = conn.(*xconnpool.XConn).Release()
-			fmt.Printf("[client] write message %d failed, release connection (%s)\n", err)
-			if conn, err = xcp.RawGet(); err != nil {
-				fmt.Printf("[client] (raw) get connection failed (%s)\n", err)
-				n--
-				continue
+		wg.Add(1)
+		go func(i int) {
+			if clientHandle(i, xcp) == nil {
+				atomic.AddInt64(&success, int64(1))
 			}
-			goto again
-		}
-		conn.Close()
+			wg.Done()
+		}(i)
+		time.Sleep(interval)
 	}
+
+	wg.Wait()
+	fmt.Printf("[client] exit [total: %d][success: %d]\n", count, success)
+	return nil
 }
 
-func setupServer(n int, lifetime time.Duration) ([]string, error) {
+func clientHandle(i int, xcp *XConnPool) error {
+	var (
+		err                             error
+		data                            []byte
+		conn                            net.Conn
+		getRetryCount, rawGetRetryCount int
+	)
+
+get_retry:
+	if getRetryCount > 0 {
+		fmt.Printf("[client] get connection retry (%d)\n", getRetryCount)
+	}
+	if conn, err = xcp.Get(); err != nil {
+		fmt.Printf("[client] get connection failed (%s)\n", err)
+		if getRetryCount < 3 {
+			getRetryCount++
+			goto get_retry
+		}
+		return err
+	}
+
+again:
+	if err = xpacket.Encode(conn, []byte(fmt.Sprintf("message %d", i))); err != nil {
+		fmt.Printf("[client] write message %d failed, release connection (%s)\n", i, err)
+		conn.(*XConn).Release()
+
+	raw_get_retry:
+		if rawGetRetryCount > 0 {
+			fmt.Printf("[client] (raw) get connection retry (%d)\n", rawGetRetryCount)
+		}
+		if conn, err = xcp.RawGet(); err != nil {
+			fmt.Printf("[client] (raw) get connection failed (%s)\n", err)
+			if rawGetRetryCount < 3 {
+				rawGetRetryCount++
+				goto raw_get_retry
+			}
+			return err
+		}
+		goto again
+	}
+
+	if data, err = xpacket.Decode(conn); err != nil {
+		fmt.Printf("[client] read message %d failed, release connection (%s)\n", i, err)
+		err = conn.(*XConn).Release()
+	} else {
+		err = conn.Close()
+	}
+	fmt.Printf("[client] receive response: %s\n", string(data))
+
+	return err
+}
+
+func setupServer(n int, interval, lifetime time.Duration) ([]string, error, *sync.WaitGroup) {
 	var (
 		addrList = make([]string, 0, n)
 		ls       = make([]net.Listener, 0, n)
+		wg       = &sync.WaitGroup{}
+		i        int
 		l        net.Listener
 		err      error
 	)
 
 	for i := 0; i < n; i++ {
-		if l, err = net.Listen("0.0.0.0:0"); err != nil {
-			return nil, err
+		if l, err = net.Listen("tcp", "0.0.0.0:0"); err != nil {
+			return nil, err, nil
 		}
 		ls = append(ls, l)
 		addrList = append(addrList, l.Addr().String())
 	}
 
 	for i, l = range ls {
-		go server(l, lifetime, i+1)
+		wg.Add(1)
+		go func(l net.Listener, i int) {
+			server(l, interval, lifetime, i+1)
+			wg.Done()
+		}(l, i)
 	}
 
-	return addrList
+	return addrList, nil, wg
 }
 
-func server(l net.Listener, lifetime time.Duration, sid int) {
+func server(l net.Listener, interval, lifetime time.Duration, sid int) {
 	var (
 		wg          = &sync.WaitGroup{}
 		ctx, cancel = context.WithTimeout(context.TODO(), lifetime)
+		conn        net.Conn
+		err         error
 		cid         int
 	)
 
@@ -94,24 +216,24 @@ func server(l net.Listener, lifetime time.Duration, sid int) {
 	}(ctx)
 
 	for {
-		if conn, err := l.Accept(); err != nil {
+		if conn, err = l.Accept(); err != nil {
 			break
 		}
 		cid++
 
 		wg.Add(1)
-		go func() {
-			handle(ctx, conn, sid, cid)
+		go func(conn net.Conn, cid int) {
+			serverHandle(ctx, conn, sid, cid, interval)
 			wg.Done()
-		}()
+		}(conn, cid)
 	}
 
 	wg.Wait()
-	fmt.Printf("[server %d] timeout exit (%s)", sid, lifetime)
+	fmt.Printf("[server %d] timeout exit (%s)\n", sid, lifetime)
 	cancel()
 }
 
-func handle(ctx context.Context, conn net.Conn, sid, cid int) {
+func serverHandle(ctx context.Context, conn net.Conn, sid, cid int, interval time.Duration) {
 	var (
 		data []byte
 		err  error
@@ -130,10 +252,15 @@ func handle(ctx context.Context, conn net.Conn, sid, cid int) {
 				return
 			}
 
-			if err = xpacket.Encode(conn, data); err != nil {
+			time.Sleep(interval)
+
+			back := []byte(fmt.Sprintf("%s [server: %d][connection: %d]", data, sid, cid))
+
+			if err = xpacket.Encode(conn, back); err != nil {
 				fmt.Printf("[server: %d][connection: %d] exit (%s)\n", sid, cid, err)
 				return
 			}
+
 		}
 	}
 }

@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-25
+// 修订日期: 2017-01-27
 
 // go-xconnpool实现了一个并发安全的连接池, 该连接池
 // 可以用来管理和重用连接, 由该连接池产生的连接满足
@@ -17,7 +17,7 @@ import (
 )
 
 // 版本信息
-var Version = "1.2.0-alpha"
+var Version = "1.2.0"
 
 // 如果连接池已经关闭却还对其进行操作
 // 会抛出该错误.
@@ -64,7 +64,7 @@ func (xc *XConn) Close() error {
 // 调用Close(), Release()函数都会返回ErrXConnClosed.
 func (xc *XConn) Release() error {
 	xc.mtx.Lock()
-	defer xc.mtx.Lock()
+	defer xc.mtx.Unlock()
 
 	if !xc.closed {
 		if err := xc.Conn.Close(); err != nil {
