@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-17
+// 修订日期: 2017-01-27
 
 // go-xvalid是一个对配置参数进行合法性校验的工具包.
 package xvalid
@@ -99,9 +99,10 @@ func validateStruct(prefix string, x interface{}) (err error) {
 	)
 
 	for i := 0; i < n; i++ {
+
 		var (
 			fv, sf     = xv.Field(i), xt.Field(i)
-			kind, name = fv.Kind(), prefix + sf.Name
+			kind, name = fv.Kind(), prefix + getFieldName(sf)
 		)
 
 		if tag, ok := sf.Tag.Lookup("xvalid"); ok && fv.CanSet() {
@@ -140,4 +141,25 @@ func validateStruct(prefix string, x interface{}) (err error) {
 
 func validateFlagSet(fs *flag.FlagSet) error {
 	return nil
+}
+
+// 增加xname, json, yaml标签对字段进行重命名. 优先使用
+// xname, 其次是json, 最后为yaml. 当然之后可能支持其它
+// 标签, 但是xname的优先级永远保持最高. 如果设置了标签
+// 但是标签的内容为空串, 则视为未设置.
+func getFieldName(sf rft.StructField) string {
+	var name = sf.Tag.Get("xname")
+	if name != "" {
+		return name
+	}
+
+	if name = sf.Tag.Get("json"); name != "" {
+		return name
+	}
+
+	if name = sf.Tag.Get("yaml"); name != "" {
+		return name
+	}
+
+	return sf.Name
 }
