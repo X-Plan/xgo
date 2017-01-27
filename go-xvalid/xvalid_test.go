@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-19
+// 修订日期: 2017-01-27
 package xvalid
 
 import (
@@ -454,4 +454,43 @@ func TestExample(t *testing.T) {
 
 	d := &foo3{}
 	xassert.NotNil(t, cpanic(func() { Validate(d) }))
+}
+
+type renameStruct1 struct {
+	D renameStruct2 `xvalid:"noempty" xname:"xnamed"`
+}
+
+type renameStruct2 struct {
+	E []renameStruct3 `xvalid:"inoempty" json:"jsone"`
+}
+
+type renameStruct3 struct {
+	F map[string]int `xvalid:"imin=5" yaml:"yamlf"`
+}
+
+func TestFieldRename(t *testing.T) {
+	var a = struct {
+		A int `xvalid:"min=20" xname:"xnamea" json:"jsona" yaml:"yamla"`
+	}{A: 10}
+	xassert.Match(t, Validate(&a), `xnamea: can't satisfy term 'min=20'`)
+
+	var b = struct {
+		B int `xvalid:"min=20" xname:"" json:"jsonb" yaml:"yamlb"`
+	}{B: 10}
+	xassert.Match(t, Validate(&b), `jsonb: can't satisfy term 'min=20'`)
+
+	var c = struct {
+		C int `xvalid:"max=5" json:"" yaml:"yamlc"`
+	}{C: 10}
+	xassert.Match(t, Validate(&c), `yamlc: can't satisfy term 'max=5'`)
+
+	var d = renameStruct1{
+		D: renameStruct2{
+			E: []renameStruct3{
+				renameStruct3{F: map[string]int{"foo": 1}},
+			},
+		},
+	}
+
+	xassert.Match(t, Validate(&d), `xnamed.jsone\[0\].yamlf\[foo\]: can't satisfy term 'imin=5'`)
 }
