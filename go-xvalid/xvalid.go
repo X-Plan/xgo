@@ -9,7 +9,6 @@
 package xvalid
 
 import (
-	"flag"
 	"fmt"
 	rft "reflect"
 )
@@ -24,10 +23,9 @@ var support = [...]bool{
 	false, false, true, true, true, true, true, true, false,
 }
 
-// 该函数对x进行合法性的校验, x的类型可以为*flag.FlagSet和struct.
-// 如果为*flag.FlagSet类型, 则校验规则依赖于Usage中的xvalid标签.
-// 如果为一般的struct类型, 则校验规则依赖于'xvalid'tag中的信息.
-// xvalid的由一组term构成, term之间用逗号分隔. term的取值如下:
+// 该函数对x进行合法性的校验, x的类型可以为指向struct类型的指针.
+// 校验规则依赖于'xvalid'tag中的信息.  xvalid的由一组term构成,
+// term之间用逗号分隔. term的取值如下:
 //
 // 1. default: 默认值. 只对标量类型有效.
 // 2. noempty: 非空. 对于数值类型则为非零.
@@ -43,11 +41,7 @@ var support = [...]bool{
 // 校验过程中会出现两种错误, 第一种是传入的x不符合接口要求, 会直接
 // panic, 第二种就是该项的值不符合xvalid的规则, 返回错误.
 func Validate(x interface{}) error {
-	if fs, ok := x.(*flag.FlagSet); ok {
-		return validateFlagSet(fs)
-	} else {
-		return validate("", x)
-	}
+	return validate("", x)
 }
 
 // x的对应的Kind应该为Ptr,Interface,Slice,Array.关于Kind的
@@ -137,10 +131,6 @@ func validateStruct(prefix string, x interface{}) (err error) {
 	}
 
 	return
-}
-
-func validateFlagSet(fs *flag.FlagSet) error {
-	return nil
 }
 
 // 增加xname, json, yaml标签对字段进行重命名. 优先使用
