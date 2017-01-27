@@ -14,7 +14,7 @@ import (
 	rft "reflect"
 )
 
-const Version = "1.0.0"
+const Version = "1.1.0"
 
 // 并不是所有的类型都可以用xvalid标签修饰, 该数组指出了
 // 哪些类型可以支持xvalid tag, 哪些不行.

@@ -1,7 +1,7 @@
 #go-xvalid
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **go-xvalid**是一个对配置信息合法性进行校验的[Golang][Go]工具包. 它通过对需要检查的字段设定*xvalid tag*.   
