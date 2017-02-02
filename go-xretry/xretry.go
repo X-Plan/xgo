@@ -25,8 +25,10 @@ func Retry(op func() error, n int, interval time.Duration) (error, int) {
 		err error
 	)
 
-	for i = 0; i <= n; i++ {
-		if err = op(); err == nil {
+	// 希望这个循环的条件不会让你感到奇怪 :)
+	// 执行成功和没有重试次数都会让该循环退出.
+	for i = 0; n >= 0; i++ {
+		if err = op(); err == nil || i >= n {
 			break
 		}
 
