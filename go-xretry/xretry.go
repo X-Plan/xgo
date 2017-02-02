@@ -10,6 +10,8 @@ package xretry
 
 import "time"
 
+const Version = "1.0.0"
+
 // 当op返回非空的error时, Retry回对其进行重试, 重试的次数上限为
 // n, 重试的时间间隔采取指数回退的方式, 基础的间隔为internval, 之后
 // 的间隔为2*interval, 4*interval, 8*interval. 该函数返回最后一次
