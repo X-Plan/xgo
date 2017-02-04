@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-02
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-02
+// 修订日期: 2017-02-05
 package xretry
 
 import (
@@ -62,4 +62,24 @@ func TestZeroInterval(t *testing.T) {
 	err, n := Retry(createOP(10), 10, time.Duration(0))
 	xassert.IsNil(t, err)
 	xassert.Equal(t, n, 9)
+}
+
+func createFatalOP(n, threshold int) func() error {
+	return func() error {
+		fmt.Println(time.Now())
+		n--
+		if n == 0 {
+			return nil
+		} else if n == threshold {
+			return FatalError{errAlive}
+		} else {
+			return errAlive
+		}
+	}
+}
+
+func TestFatalError(t *testing.T) {
+	err, n := Retry(createFatalOP(10, 5), 10, time.Second)
+	xassert.Equal(t, err, errAlive)
+	xassert.Equal(t, n, 4)
 }
