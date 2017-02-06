@@ -1,0 +1,34 @@
+// xp.proto
+//
+// 创建人: blinklv <blinklv@icloud.com>
+// 创建日期: 2017-01-16
+// 修订人: blinklv <blinklv@icloud.com>
+// 修订日期: 2017-02-06
+syntax = "proto3";
+
+message Header {
+    uint64 sequence = 1;
+    uint32 cmd = 2;
+    uint32 sub_cmd = 3;
+    string client_id = 4;
+    string identity = 5;
+    string access_token = 6;
+    string resource = 7;
+    repeated string permission = 8;
+}
+
+message Return {
+    int32 code = 1;
+    string msg = 2;
+}
+
+message Request {
+    Header head = 1;
+    bytes  body = 2;
+}
+
+message Response {
+    Header head = 1;
+    Return ret = 2;
+    bytes  body = 3;
+}
