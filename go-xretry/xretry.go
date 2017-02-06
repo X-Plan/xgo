@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-02
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-05
+// 修订日期: 2017-02-06
 
 // go-xretry可以对某一操作以指数回退的方式进行重试.
 package xretry
@@ -18,7 +18,11 @@ const Version = "1.1.0"
 // NOTE: Retry因为该错误类型返回的error是
 // 原始error, 而不是FatalError包装后的error.
 type FatalError struct {
-	error
+	Err error
+}
+
+func (fe FatalError) Error() string {
+	return fe.Err.Error()
 }
 
 // 当op返回非空的error时, Retry回对其进行重试, 重试的次数上限为
@@ -44,7 +48,7 @@ func Retry(op func() error, n int, interval time.Duration) (error, int) {
 		}
 
 		if fatalError, ok := err.(FatalError); ok {
-			err = fatalError.error
+			err = fatalError.Err
 			break
 		}
 
