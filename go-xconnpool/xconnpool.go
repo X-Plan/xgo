@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-12
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-04
+// 修订日期: 2017-02-06
 
 // go-xconnpool实现了一个并发安全的连接池, 该连接池
 // 可以用来管理和重用连接, 由该连接池产生的连接满足
@@ -100,11 +100,15 @@ type Factory func() (net.Conn, error)
 // NOTE: 不强制要求Factory一定使用该类型对error
 // 进行包装.
 type GetConnError struct {
-	error
+	Err error
 	// 当建立连接失败后可以将欲建立连接的ip地址
 	// 填写到该字段. 用于向调用方反馈存在问题的
 	// ip地址.
 	Addr string
+}
+
+func (gce GetConnError) Error() string {
+	return gce.Err.Error()
 }
 
 // 连接池类型. 为了满足并发安全, 它在实现上
