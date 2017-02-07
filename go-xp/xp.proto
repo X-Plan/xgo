@@ -3,8 +3,15 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-16
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-06
+// 修订日期: 2017-02-07
 syntax = "proto3";
+
+enum EnumRetCode {
+    OK = 0;
+    SERVER_ERROR = -1;
+    REQUEST_ERROR = -2;
+    AUTH_FAILED = -3;
+}
 
 message Header {
     uint64 sequence = 1;
@@ -19,7 +26,8 @@ message Header {
 
 message Return {
     int32 code = 1;
-    string msg = 2;
+    int32 sub_code = 2;
+    string msg = 3;
 }
 
 message Request {
