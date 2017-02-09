@@ -11,7 +11,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/X-Plan/xgo/go-xlog"
 	"net"
 	"regexp"
 	"sync"
@@ -35,8 +35,7 @@ type XMutex interface {
 type XServer struct {
 	Addr      string
 	XMutex    XMutex
-	ErrorLog  *log.Logger
-	DebugLog  *log.Logger
+	XL        *xlog.XLogger
 	TLSConfig *tls.Config
 
 	l          net.Listener
@@ -71,7 +70,7 @@ func (xs *XServer) Serve(l net.Listener) error {
 	xs.exit = make(chan int)
 	xs.acceptDone = make(chan int)
 
-	xs.debugLogf("start %s server (listen on %s)", xs.name, l.Addr())
+	xs.XL.Info("start %s server (listen on %s)", xs.name, l.Addr())
 outer:
 	for {
 		if conn, err = l.Accept(); err != nil {
@@ -84,7 +83,7 @@ outer:
 				if delay > time.Second {
 					delay = time.Second
 				}
-				xs.errLogf("accept (%s) connection failed (retrying in %v): %s", xs.name, delay, err)
+				xs.XL.Error("accept (%s) connection failed (retrying in %v): %s", xs.name, delay, err)
 				time.Sleep(delay)
 				continue
 			}
@@ -93,15 +92,12 @@ outer:
 			break outer
 		}
 
-		xs.debugLogf("accept (%s) connection (%s)", xs.name, conn.RemoteAddr())
-
 		delay = 0
 
 		xs.wg.Add(1)
 		go func(conn net.Conn) {
 			xs.XMutex.Handle(conn, xs.exit)
 			xs.wg.Done()
-			xs.debugLogf("release (%s) connection (%s)", xs.name, conn.RemoteAddr())
 		}(conn)
 	}
 
@@ -147,9 +143,9 @@ func (xs *XServer) Quit() (err error) {
 		}
 
 		if err != nil {
-			xs.debugLogf("quit %s server: %s", xs.name, err)
+			xs.XL.Info("quit %s server: %s", xs.name, err)
 		} else {
-			xs.debugLogf("quit %s server", xs.name)
+			xs.XL.Info("quit %s server", xs.name)
 		}
 	})
 	return
@@ -162,17 +158,5 @@ func (xs *XServer) ListenAddr() string {
 		return xs.l.Addr().String()
 	} else {
 		return xs.Addr
-	}
-}
-
-func (xs *XServer) errLogf(format string, v ...interface{}) {
-	if xs.ErrorLog != nil {
-		xs.ErrorLog.Printf(format, v...)
-	}
-}
-
-func (xs *XServer) debugLogf(format string, v ...interface{}) {
-	if xs.DebugLog != nil {
-		xs.DebugLog.Printf(format, v...)
 	}
 }

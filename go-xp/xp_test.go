@@ -10,27 +10,13 @@ package xp
 import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
-	"io"
-	"io/ioutil"
+	"github.com/X-Plan/xgo/go-xlog"
 	"log"
 	"net"
-	"os"
 	"sync"
 	"testing"
 	"time"
 )
-
-type debugLogger struct{}
-
-func (dl debugLogger) Write(b []byte) (int, error) {
-	return io.WriteString(os.Stdout, fmt.Sprintf("[DEBUG]: %s", string(b)))
-}
-
-type errorLogger struct{}
-
-func (el errorLogger) Write(b []byte) (int, error) {
-	return io.WriteString(os.Stderr, fmt.Sprintf("[ERROR]: %s", string(b)))
-}
 
 func TestServerCloseOneClient(t *testing.T) {
 	testServer(t, 5*time.Second, 1, 20)
@@ -148,28 +134,15 @@ func runClient(port string, n int, count int, errch chan error) {
 }
 
 func runServer(l net.Listener, duration time.Duration, errch chan error) {
-	var (
-		err    error
-		logdir string
-	)
-
-	if logdir, err = ioutil.TempDir("/tmp", "tcpapi"); err != nil {
-		errch <- err
-		return
-	}
-	defer os.RemoveAll(logdir)
-
 	xmtx := NewXRouter()
-	xmtx.ErrorLog = log.New(errorLogger{}, "", 0)
+	xmtx.ErrorLog = log.New(xlog.ErrorWrapper{nil}, "", 0)
 	xmtx.Register(createXHandlerPair(1000, 1000, 0))
 	xmtx.Register(createXHandlerPair(1000, 2000, -1))
 	xmtx.Register(createXHandlerPair(2000, 1000, -2))
 	xmtx.Register(createXHandlerPair(2000, 2000, -3))
 
 	xs := &XServer{
-		XMutex:   xmtx,
-		ErrorLog: log.New(errorLogger{}, "", 0),
-		DebugLog: log.New(debugLogger{}, "", 0),
+		XMutex: xmtx,
 	}
 
 	go func() { errch <- xs.Serve(l) }()
