@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-11-08
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// 修订日期: 2017-02-09
 
 // go-xlog的测试文件.
 package xlog
@@ -147,4 +147,18 @@ func genBlock(id string, num, size int) string {
 	)
 
 	return snum + strings.Repeat(id, size-1-len(snum)) + "\n"
+}
+
+func TestNilXLogger(t *testing.T) {
+	var xl *XLogger
+
+	n, err := xl.Write([]byte("nothing"))
+	xassert.Equal(t, n, 0)
+	xassert.IsNil(t, err)
+	xassert.IsNil(t, xl.Fatal("nothing"))
+	xassert.IsNil(t, xl.Error("nothing"))
+	xassert.IsNil(t, xl.Warn("nothing"))
+	xassert.IsNil(t, xl.Info("nothing"))
+	xassert.IsNil(t, xl.Debug("nothing"))
+	xassert.IsNil(t, xl.Close())
 }
