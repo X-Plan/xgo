@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-07
+// 修订日期: 2017-02-09
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Version = "1.2.1"
+	Version = "1.2.2"
 )
 
 // 日志优先级, 数值越小, 优先级越高.
@@ -221,6 +221,10 @@ func New(xcfg *XConfig) (xl *XLogger, err error) {
 // 将数据写入到XLogger. 通常情况下你不需要直接
 // 调用该接口. 除非你已经拥有良好的日志格式.
 func (xl *XLogger) Write(b []byte) (n int, err error) {
+	if xl == nil {
+		return 0, nil
+	}
+
 	// 捕获写已经关闭的channel所产生的panic.
 	defer func() {
 		if x := recover(); x != nil {
@@ -246,26 +250,41 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 }
 
 func (xl *XLogger) Fatal(format string, args ...interface{}) error {
+	if xl == nil {
+		return nil
+	}
 	_, err := xl.output(FATAL, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Error(format string, args ...interface{}) error {
+	if xl == nil {
+		return nil
+	}
 	_, err := xl.output(ERROR, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Warn(format string, args ...interface{}) error {
+	if xl == nil {
+		return nil
+	}
 	_, err := xl.output(WARN, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Info(format string, args ...interface{}) error {
+	if xl == nil {
+		return nil
+	}
 	_, err := xl.output(INFO, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Debug(format string, args ...interface{}) error {
+	if xl == nil {
+		return nil
+	}
 	_, err := xl.output(DEBUG, fmt.Sprintf(format, args...))
 	return err
 }
@@ -274,6 +293,9 @@ func (xl *XLogger) Debug(format string, args ...interface{}) error {
 // 任何操作都会返回ErrClosed错误. 如果日志在写文
 // 件的时候出现问题, 日志也会被异常关闭.
 func (xl *XLogger) Close() (err error) {
+	if xl == nil {
+		return nil
+	}
 	// 关闭一个已经关闭的channel会产生
 	// panic, 这里也需要对其进行捕获.
 	defer func() {

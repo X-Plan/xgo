@@ -1,7 +1,7 @@
 #go-xlog
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **go-xlog**实现了一个并发环境下使用的滚动日志. 它从以下三个纬度限制  
