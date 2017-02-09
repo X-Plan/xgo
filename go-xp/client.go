@@ -3,11 +3,12 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-06
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-06
+// 修订日期: 2017-02-09
 
 package xp
 
 import (
+	"fmt"
 	"github.com/X-Plan/xgo/go-xconnpool"
 	"github.com/X-Plan/xgo/go-xpacket"
 	"github.com/X-Plan/xgo/go-xretry"
@@ -73,7 +74,7 @@ func (xcli *XClient) Send(req *Request) (*Response, error) {
 	if req.Head.Sequence == 0 {
 		req.Head.Sequence = atomic.AddUint64(&xcli.seq, uint64(1))
 	}
-	var rsp *Response
+	var rsp = &Response{}
 
 	err, _ := xretry.Retry(func() error {
 		conn, err := xcli.xcp.Get()
@@ -110,6 +111,14 @@ func (xcli *XClient) Send(req *Request) (*Response, error) {
 			return err
 		}
 
+		// 服务端错误需要上报.
+		if rsp.GetRet().GetCode() == int32(EnumRetCode_SERVER_ERROR) {
+			xcli.sched.Feedback(conn.RemoteAddr().String(), false)
+			conn.(*xconnpool.XConn).Unuse()
+			return fmt.Errorf("%s: %s", EnumRetCode_SERVER_ERROR, rsp.GetRet().GetMsg())
+		}
+
+		xcli.sched.Feedback(conn.RemoteAddr().String(), true)
 		return nil
 	}, xcli.rc, xcli.interval)
 

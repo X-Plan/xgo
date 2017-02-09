@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-07
+// 修订日期: 2017-02-09
 
 package xp
 
@@ -71,7 +71,7 @@ func (xs *XServer) Serve(l net.Listener) error {
 	xs.exit = make(chan int)
 	xs.acceptDone = make(chan int)
 
-	xs.debugLogf("start %xs server (listen on %xs)", xs.name, l.Addr())
+	xs.debugLogf("start %s server (listen on %s)", xs.name, l.Addr())
 outer:
 	for {
 		if conn, err = l.Accept(); err != nil {
@@ -84,7 +84,7 @@ outer:
 				if delay > time.Second {
 					delay = time.Second
 				}
-				xs.errLogf("accept (%xs) connection failed (retrying in %v): %xs", xs.name, delay, err)
+				xs.errLogf("accept (%s) connection failed (retrying in %v): %s", xs.name, delay, err)
 				time.Sleep(delay)
 				continue
 			}
@@ -93,12 +93,15 @@ outer:
 			break outer
 		}
 
+		xs.debugLogf("accept (%s) connection (%s)", xs.name, conn.RemoteAddr())
+
 		delay = 0
 
 		xs.wg.Add(1)
 		go func(conn net.Conn) {
 			xs.XMutex.Handle(conn, xs.exit)
 			xs.wg.Done()
+			xs.debugLogf("release (%s) connection (%s)", xs.name, conn.RemoteAddr())
 		}(conn)
 	}
 
@@ -143,7 +146,11 @@ func (xs *XServer) Quit() (err error) {
 			}
 		}
 
-		xs.debugLogf("quit %xs server: %xs", xs.name, err)
+		if err != nil {
+			xs.debugLogf("quit %s server: %s", xs.name, err)
+		} else {
+			xs.debugLogf("quit %s server", xs.name)
+		}
 	})
 	return
 }

@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-07
+// 修订日期: 2017-02-09
 
 package xp
 
@@ -53,8 +53,12 @@ type xhandlerPair struct {
 	auth XAuthHandler
 }
 
-func (xr *XRouter) Register(cmd, subcmd uint32, xh XHandler, auth XAuthHandler) {
+func (xr *XRouter) Register(cmd, subcmd uint32, xh XHandler, auth XAuthHandler) error {
+	if xh == nil {
+		return errors.New("XHandler can't be nil")
+	}
 	xr.mh[uint64(cmd)<<32+uint64(subcmd)] = xhandlerPair{xh, auth}
+	return nil
 }
 
 func (xr *XRouter) Lookup(cmd, subcmd uint32) (XHandler, XAuthHandler) {
@@ -76,6 +80,7 @@ func (xr *XRouter) Handle(conn net.Conn, exit chan int) {
 		reqch:    make(chan *Request, 8),
 		readDone: make(chan int, 1),
 		exit:     exit,
+		xr:       xr,
 	}
 	go xrc.read()
 	xrc.write()
@@ -117,16 +122,22 @@ func (xrc *xrouterConn) read() {
 
 func (xrc *xrouterConn) write() {
 	var (
-		err error
-		req *Request
+		code EnumRetCode
+		err  error
+		req  *Request
 	)
 
 outer:
 	for {
 		select {
 		case req = <-xrc.reqch:
-			if err = xrc.handleAndWrite(req); err != nil {
+			if err, code = xrc.handleAndWrite(req); err != nil {
 				xrc.xr.logf("%s", err)
+			}
+			// 只有错误信息为服务内部错误时服务端才
+			// 主动断开连接.
+			if code == EnumRetCode_SERVER_ERROR {
+				break outer
 			}
 		case <-xrc.exit:
 			break outer
@@ -145,7 +156,7 @@ outer:
 
 	close(xrc.reqch)
 	for req = range xrc.reqch {
-		if err = xrc.handleAndWrite(req); err != nil {
+		if err, _ = xrc.handleAndWrite(req); err != nil {
 			xrc.xr.logf("%s", err)
 		}
 	}
@@ -153,47 +164,47 @@ outer:
 	return
 }
 
-func (xrc *xrouterConn) handleAndWrite(req *Request) error {
+func (xrc *xrouterConn) handleAndWrite(req *Request) (error, EnumRetCode) {
 	var (
 		err      error
 		data     []byte
 		rsp      *Response
-		head     = req.Head
-		xh, auth = xrc.xr.Lookup(head.Cmd, head.SubCmd)
+		head     = req.GetHead()
+		xh, auth = xrc.xr.Lookup(head.GetCmd(), head.GetSubCmd())
 	)
 
 	if auth != nil {
 		if err = auth.Handle(head); err != nil {
 			xpacket.Encode(xrc.conn, createResponseData(head, EnumRetCode_AUTH_FAILED, err.Error()))
-			return err
+			return err, EnumRetCode_AUTH_FAILED
 		}
 	}
 
 	if xh == nil {
-		msg := fmt.Sprintf("invalid cmd/subcmd (%d/%d)", head.Cmd, head.SubCmd)
+		msg := fmt.Sprintf("invalid cmd/subcmd (%d/%d)", head.GetCmd(), head.GetSubCmd())
 		xpacket.Encode(xrc.conn, createResponseData(head, EnumRetCode_REQUEST_ERROR, msg))
-		return errors.New(msg)
+		return errors.New(msg), EnumRetCode_REQUEST_ERROR
 	}
 
 	if rsp, err = xh.Handle(req); err != nil {
 		msg := fmt.Sprintf("server internal error (%s)", err)
 		xpacket.Encode(xrc.conn, createResponseData(head, EnumRetCode_SERVER_ERROR, msg))
-		return errors.New(msg)
+		return errors.New(msg), EnumRetCode_SERVER_ERROR
 	}
-	rsp.Head = req.Head
+	rsp.Head = req.GetHead()
 	if rsp.Ret == nil {
 		rsp.Ret = &Return{Msg: "ok"}
 	}
 
 	if data, err = proto.Marshal(rsp); err == nil {
 		if err = xpacket.Encode(xrc.conn, data); err != nil {
-			return err
+			return err, EnumRetCode_SERVER_ERROR
 		}
 	} else {
-		return err
+		return err, EnumRetCode_SERVER_ERROR
 	}
 
-	return nil
+	return nil, EnumRetCode_OK
 }
 
 func createResponseData(head *Header, code EnumRetCode, msg string) []byte {
