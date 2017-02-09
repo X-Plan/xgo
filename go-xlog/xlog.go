@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Version = "1.2.2"
+	Version = "1.2.3"
 )
 
 // 日志优先级, 数值越小, 优先级越高.
@@ -250,41 +250,26 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 }
 
 func (xl *XLogger) Fatal(format string, args ...interface{}) error {
-	if xl == nil {
-		return nil
-	}
 	_, err := xl.output(FATAL, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Error(format string, args ...interface{}) error {
-	if xl == nil {
-		return nil
-	}
 	_, err := xl.output(ERROR, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Warn(format string, args ...interface{}) error {
-	if xl == nil {
-		return nil
-	}
 	_, err := xl.output(WARN, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Info(format string, args ...interface{}) error {
-	if xl == nil {
-		return nil
-	}
 	_, err := xl.output(INFO, fmt.Sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Debug(format string, args ...interface{}) error {
-	if xl == nil {
-		return nil
-	}
 	_, err := xl.output(DEBUG, fmt.Sprintf(format, args...))
 	return err
 }
@@ -423,6 +408,10 @@ func (xl *XLogger) write(b []byte) error {
 
 // 对输出进行包装. 附带一些标签信息.
 func (xl *XLogger) output(level int, m string) (n int, err error) {
+	if xl == nil {
+		return 0, nil
+	}
+
 	s := strings.Join([]string{
 		timeTag(),
 		"[", xl.tag, "]",
