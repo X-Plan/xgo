@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const Version = "1.0.0"
+
 // 用来探测net.errClosing错误, 该错误标准库
 // 没有导出, 只有通过字符串的方式进行匹配.
 var reErrClosing = regexp.MustCompile(`use of closed network connection`)
