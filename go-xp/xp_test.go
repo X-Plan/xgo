@@ -20,8 +20,39 @@ import (
 	"time"
 )
 
+// 无客户端.
+func TestZeroClient(t *testing.T) {
+	testServer(t, 3*time.Second, 0, 10)
+}
+
+// 存在客户端, 但是客户端不发送消息.
+func TestZeroMsgClient(t *testing.T) {
+	testServer(t, 3*time.Second, 10, 0)
+}
+
+// 一个客户端, 服务端优先关闭.
 func TestServerCloseOneClient(t *testing.T) {
 	testServer(t, 5*time.Second, 1, 20)
+}
+
+// 一个客户端, 客户端优先关闭.
+func TestClientCloseOneClient(t *testing.T) {
+	testServer(t, 10*time.Second, 1, 3)
+}
+
+// 多个客户端, 服务端优先关闭.
+func TestServerCloseMultiClient(t *testing.T) {
+	testServer(t, 5*time.Second, 10, 20)
+}
+
+// 多个客户端, 客户端优先关闭.
+func TestClientCloseMultiClient(t *testing.T) {
+	testServer(t, 10*time.Second, 10, 3)
+}
+
+// 多个客户端, 混合式关闭.
+func TestMixCloseMultiClient(t *testing.T) {
+	testServer(t, 10*time.Second, 10, 3, 10, 20)
 }
 
 func testServer(t *testing.T, duration time.Duration, values ...int) {
