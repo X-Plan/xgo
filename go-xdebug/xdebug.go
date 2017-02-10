@@ -16,18 +16,28 @@ import (
 const Version = "1.0.0"
 
 // 用于打印调试信息的接口.
-type XDebugger interface {
-	Printf(format string, argv ...interface{})
+type XDebugger struct {
+	d debugger
+}
+
+func (xd *XDebugger) Printf(format string, argv ...interface{}) {
+	if xd != nil {
+		xd.d.Printf(format, argv...)
+	}
 }
 
 // 创建一个新的调试接口.
-func New(prefix string, w io.Writer) XDebugger {
-	return &rootDebugger{l: log.New(w, "["+prefix+"]", 0)}
+func New(prefix string, w io.Writer) *XDebugger {
+	return &XDebugger{&rootDebugger{l: log.New(w, "["+prefix+"]", 0)}}
 }
 
 // 继承一个已有的调试接口.
-func Inherit(prefix string, xd XDebugger) XDebugger {
-	return &childDebugger{parent: xd, prefix: prefix}
+func Inherit(prefix string, xd XDebugger) *XDebugger {
+	return &XDebugger{&childDebugger{parent: xd.d, prefix: prefix}}
+}
+
+type debugger interface {
+	Printf(format string, argv ...interface{})
 }
 
 type rootDebugger struct {
@@ -35,18 +45,14 @@ type rootDebugger struct {
 }
 
 func (rd *rootDebugger) Printf(format string, argv ...interface{}) {
-	if rd != nil {
-		rd.l.Printf(format, argv...)
-	}
+	rd.l.Printf(format, argv...)
 }
 
 type childDebugger struct {
-	parent XDebugger
+	parent debugger
 	prefix string
 }
 
 func (cd *childDebugger) Printf(format string, argv ...interface{}) {
-	if cd != nil {
-		cd.parent.Printf("["+cd.prefix+"]"+format, argv...)
-	}
+	cd.parent.Printf("["+cd.prefix+"]"+format, argv...)
 }
