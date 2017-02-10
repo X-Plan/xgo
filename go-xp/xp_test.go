@@ -3,16 +3,18 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-09
+// 修订日期: 2017-02-10
 
 package xp
 
 import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"github.com/X-Plan/xgo/go-xdebug"
 	"github.com/X-Plan/xgo/go-xlog"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -97,7 +99,7 @@ func runClient(port string, n int, count int, errch chan error) {
 			var cmd, subcmd uint32
 
 			for j := 0; j < count; j++ {
-				switch j % 4 {
+				switch j % 5 {
 				case 0:
 					cmd, subcmd = uint32(1000), uint32(1000)
 				case 1:
@@ -106,6 +108,8 @@ func runClient(port string, n int, count int, errch chan error) {
 					cmd, subcmd = uint32(2000), uint32(1000)
 				case 3:
 					cmd, subcmd = uint32(2000), uint32(2000)
+				case 4:
+					cmd, subcmd = uint32(3000), uint32(1000)
 				}
 
 				rsp, err := xcli.Send(&Request{
@@ -143,6 +147,7 @@ func runServer(l net.Listener, duration time.Duration, errch chan error) {
 
 	xs := &XServer{
 		XMutex: xmtx,
+		XD:     xdebug.New("server", os.Stderr),
 	}
 
 	go func() { errch <- xs.Serve(l) }()

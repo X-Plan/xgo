@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-09
+// 修订日期: 2017-02-10
 
 package xp
 
@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/X-Plan/xgo/go-xdebug"
 	"github.com/X-Plan/xgo/go-xlog"
 	"net"
 	"regexp"
@@ -37,6 +38,7 @@ type XServer struct {
 	XMutex    XMutex
 	XL        *xlog.XLogger
 	TLSConfig *tls.Config
+	XD        *xdebug.XDebugger
 
 	l          net.Listener
 	exit       chan int
@@ -91,6 +93,7 @@ outer:
 			// 一般情况下是由于l.Close操作引起的.
 			break outer
 		}
+		xs.XD.Printf("accept (%s) connection (%s)", xs.name, conn.RemoteAddr())
 
 		delay = 0
 
@@ -98,6 +101,7 @@ outer:
 		go func(conn net.Conn) {
 			xs.XMutex.Handle(conn, xs.exit)
 			xs.wg.Done()
+			xs.XD.Printf("release (%s) connection (%s)", xs.name, conn.RemoteAddr())
 		}(conn)
 	}
 
@@ -136,6 +140,7 @@ func (xs *XServer) Quit() (err error) {
 
 		select {
 		case <-exitDone:
+			xs.XL.Info("receive exit signal")
 		case <-time.After(timeout):
 			if err == nil {
 				err = errors.New("timeout")
