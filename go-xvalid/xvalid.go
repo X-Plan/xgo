@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-01-07
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-27
+// 修订日期: 2017-02-27
 
 // go-xvalid是一个对配置参数进行合法性校验的工具包.
 package xvalid
@@ -13,7 +13,7 @@ import (
 	rft "reflect"
 )
 
-const Version = "1.1.0"
+const Version = "1.1.1"
 
 // 并不是所有的类型都可以用xvalid标签修饰, 该数组指出了
 // 哪些类型可以支持xvalid tag, 哪些不行.
@@ -99,7 +99,7 @@ func validateStruct(prefix string, x interface{}) (err error) {
 			kind, name = fv.Kind(), prefix + getFieldName(sf)
 		)
 
-		if tag, ok := sf.Tag.Lookup("xvalid"); ok && fv.CanSet() {
+		if tag, ok := tagLookup(sf.Tag, "xvalid"); ok && fv.CanSet() {
 			// 即便是xvalid tag的值为空, 但是只要设置了该tag.
 			// 当类型不匹配的时候依然会导致程序panic.
 			if !support[int(kind)] {
