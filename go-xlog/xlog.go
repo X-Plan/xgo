@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-26
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-09
+// 修订日期: 2017-02-27
 
 // xlog实现了一个单进程下并发安全的滚动日志.
 package xlog
@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Version = "1.2.3"
+	Version = "1.2.4"
 )
 
 // 日志优先级, 数值越小, 优先级越高.
@@ -250,27 +250,27 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 }
 
 func (xl *XLogger) Fatal(format string, args ...interface{}) error {
-	_, err := xl.output(FATAL, fmt.Sprintf(format, args...))
+	_, err := xl.output(FATAL, fmt.Sprintf(format+"\n", args...))
 	return err
 }
 
 func (xl *XLogger) Error(format string, args ...interface{}) error {
-	_, err := xl.output(ERROR, fmt.Sprintf(format, args...))
+	_, err := xl.output(ERROR, fmt.Sprintf(format+"\n", args...))
 	return err
 }
 
 func (xl *XLogger) Warn(format string, args ...interface{}) error {
-	_, err := xl.output(WARN, fmt.Sprintf(format, args...))
+	_, err := xl.output(WARN, fmt.Sprintf(format+"\n", args...))
 	return err
 }
 
 func (xl *XLogger) Info(format string, args ...interface{}) error {
-	_, err := xl.output(INFO, fmt.Sprintf(format, args...))
+	_, err := xl.output(INFO, fmt.Sprintf(format+"\n", args...))
 	return err
 }
 
 func (xl *XLogger) Debug(format string, args ...interface{}) error {
-	_, err := xl.output(DEBUG, fmt.Sprintf(format, args...))
+	_, err := xl.output(DEBUG, fmt.Sprintf(format+"\n", args...))
 	return err
 }
 
@@ -417,7 +417,7 @@ func (xl *XLogger) output(level int, m string) (n int, err error) {
 		"[", xl.tag, "]",
 		levelTags[level],
 		locationTag(level, 2),
-		":", m, "\n",
+		":", m,
 	}, "")
 
 	if level <= xl.level {
