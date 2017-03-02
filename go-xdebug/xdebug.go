@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2017-02-10
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-21
+// 修订日期: 2017-03-02
 
 // go-xdebug提供了一个用于打印调试信息的接口.
 package xdebug
@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "1.1.0"
+const Version = "1.1.1"
 
 // 用于打印调试信息的接口. 要么不初始化该值.
 // 要么使用New和Inherit函数创建该值.
@@ -39,7 +39,10 @@ func New(prefix string, w io.Writer) *XDebugger {
 
 // 继承一个已有的调试接口.
 func Inherit(prefix string, xd *XDebugger) *XDebugger {
-	return &XDebugger{&childDebugger{parent: xd.d, prefix: prefix}}
+	if xd != nil {
+		return &XDebugger{&childDebugger{parent: xd.d, prefix: prefix}}
+	}
+	return nil
 }
 
 type debugger interface {
