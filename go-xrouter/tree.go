@@ -21,6 +21,7 @@ const (
 
 type node struct {
 	path     string
+	tsr      bool
 	index    byte
 	nt       nodeType
 	priority uint32
@@ -40,49 +41,36 @@ func (n *node) get(path string, xps XParams, tsr bool) XHandle {
 	)
 
 outer:
-	for len(path) > 0 {
-		switch n.nt {
-		case static:
-			i = lcp(path, n.path)
-			path, tail = path[i:], n.path[i:]
+	for {
+		if n.nt != all {
+			if n.nt == static {
+				i = lcp(path, n.path)
+				path, tail = path[i:], n.path[i:]
+			} else {
+				// 'param' node type
+				if i = strings.IndexByte(path, '/'); i == -1 {
+					i = len(path)
+				}
+				xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
+				path = path[i:]
+			}
 
-			if tail == "" {
+			if n.nt == param || tail == "" {
 				if len(path) > 0 {
 					if n = n.child(path[0]); n == nil {
 						break outer
 					}
 					continue
-				} else {
+				} else if !n.tsr || (tsr && n.tsr) {
 					return n.handle
 				}
-			} else {
-				break outer
 			}
 
-		case param:
-			if i = strings.IndexByte(path, '/'); i == -1 {
-				i = len(path)
-			}
-			xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
-			path = path[i:]
-
-			if len(path) > 0 {
-				if n = n.child(path[0]); n == nil {
-					break outer
-				}
-				continue
-			} else {
-				return n.handle
-			}
-
-		case all:
-			xps = append(xps, XParam{Key: n.path[1:], Value: path})
-			return n.handle
-
-		default:
-			// Unless I make a mistake, this statement will never be executed.
-			panic(fmt.Sprintf("invalid node type (%d)", n.nt))
 		}
+
+		// 'all' node type
+		xps = append(xps, XParam{Key: n.path[1:], Value: path})
+		return n.handle
 	}
 
 	return nil
