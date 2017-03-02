@@ -61,6 +61,12 @@ outer:
 			}
 
 		case param:
+			if i = strings.IndexByte(path, '/'); i == -1 {
+				i = len(path)
+			}
+			xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
+			path = path[i:]
+
 		case all:
 		default:
 			// Unless I make a mistake, this statement will never be executed.
