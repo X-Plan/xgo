@@ -3,7 +3,7 @@
 // 创建人: blinklv <blinklv@icloud.com>
 // 创建日期: 2016-10-15
 // 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-27
+// 修订日期: 2017-03-02
 package xconnpool
 
 import (
@@ -89,6 +89,15 @@ func Test4(t *testing.T) {
 	setupClient(10, 200, 5, 100*time.Millisecond, append(addrList1, addrList2...))
 	wg1.Wait()
 	wg2.Wait()
+}
+
+// Connection in zero-capacity connection pool is equal to
+// original connection effectively.
+func TestZeroCapConnPool(t *testing.T) {
+	addrList, err, wg := setupServer(1, 0, 10*time.Second)
+	xassert.IsNil(t, err)
+	setupClient(0, 5, 5, time.Second, addrList)
+	wg.Wait()
 }
 
 func setupClient(capacity, count, n int, interval time.Duration, addrList []string) error {
