@@ -35,8 +35,8 @@ type node struct {
 // been registered.
 func (n *node) get(path string, xps XParams, tsr bool) XHandle {
 	var (
-		i          int
-		rest, tail string
+		i    int
+		tail string
 	)
 
 outer:
@@ -44,11 +44,10 @@ outer:
 		switch n.nt {
 		case static:
 			i = lcp(path, n.path)
-			path, rest, tail = path[:i], path[i:], n.path[i:]
+			path, tail = path[i:], n.path[i:]
 
 			if tail == "" {
-				if len(rest) > 0 {
-					path = rest
+				if len(path) > 0 {
 					if n = n.child(path[0]); n == nil {
 						break outer
 					}
@@ -56,8 +55,8 @@ outer:
 				} else {
 					return n.handle
 				}
-			} else if tsr && (tail == "/" && rest == "") {
-				return n.handle
+			} else {
+				break outer
 			}
 
 		case param:
@@ -67,7 +66,19 @@ outer:
 			xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
 			path = path[i:]
 
+			if len(path) > 0 {
+				if n = n.child(path[0]); n == nil {
+					break outer
+				}
+				continue
+			} else {
+				return n.handle
+			}
+
 		case all:
+			xps = append(xps, XParam{Key: n.path[1:], Value: path})
+			return n.handle
+
 		default:
 			// Unless I make a mistake, this statement will never be executed.
 			panic(fmt.Sprintf("invalid node type (%d)", n.nt))
