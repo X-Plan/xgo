@@ -47,23 +47,39 @@ func (n *node) construct(path, full string, handle XHandle) error {
 	)
 
 	for len(path) > 0 {
+		// The priority is always equal to 1, because all of the nodes
+		// in 'construct' function grow on a new branch of the trie.
+		n.priority = 1
+
 		switch path[0] {
 		case ':':
+			n.nt = param
 			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
-				if path[i] == ':' && path[i] == '*' {
+				if path[i] != '/' {
 					return fmt.Errorf("'%s' in path '%s': only one wildcard per path segment is allowed", path, full)
 				}
 				n.path, path = path[:i], path[i:]
+				n.children = make([]*node, 1)
+				n = n.children[0]
 			} else {
 				n.path, path = path, ""
 			}
-			n.nt = param
-			n.children = make([]*node, 1)
-			n = n.children[0]
 
 		case '*':
+			n.nt = all
+			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
+				return fmt.Errorf("'%s' in path '%s': catch-all routes are only allowed at the end of the path", path, full)
+			}
+			n.path, path = path, ""
 
 		default:
+			if i = strings.IndexAny(path, ":*"); i != -1 {
+				n.path, path = path[:i], path[i:]
+				n.children = make([]*node, 1)
+				n = n.children[0]
+			} else {
+				n.path, path = path, ""
+			}
 		}
 	}
 }
