@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-02
+// Last Change: 2017-03-06
 
 package xrouter
 
@@ -27,6 +27,45 @@ type node struct {
 	priority uint32
 	children []*node
 	handle   XHandle
+}
+
+// Register a new handle with the given path. If the path conflicts with
+// a existing path, a error will be returned.
+func (n *node) add(path string, handle XHandle) error {
+	var (
+		i     int
+		rest  string
+		child *node
+	)
+	return nil
+}
+
+// Init a empty node (not nil) from path parameter.
+func (n *node) construct(path, full string, handle XHandle) error {
+	var (
+		i int
+	)
+
+	for len(path) > 0 {
+		switch path[0] {
+		case ':':
+			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
+				if path[i] == ':' && path[i] == '*' {
+					return fmt.Errorf("'%s' in path '%s': only one wildcard per path segment is allowed", path, full)
+				}
+				n.path, path = path[:i], path[i:]
+			} else {
+				n.path, path = path, ""
+			}
+			n.nt = param
+			n.children = make([]*node, 1)
+			n = n.children[0]
+
+		case '*':
+
+		default:
+		}
+	}
 }
 
 // Returns the handle registered with the given path. The values of wildcards
