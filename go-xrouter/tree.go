@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-06
+// Last Change: 2017-03-07
 
 package xrouter
 
@@ -62,7 +62,9 @@ func (n *node) construct(path, full string, handle XHandle) error {
 				n.children = make([]*node, 1)
 				n = n.children[0]
 			} else {
-				n.path, path = path, ""
+				n.handle, n.path, path = handle, path, ""
+				// create a tsr node.
+				n.children = []*node{&node{path: "/", tsr: true, index: '/', priority: 1, handle: handle}}
 			}
 
 		case '*':
@@ -70,7 +72,7 @@ func (n *node) construct(path, full string, handle XHandle) error {
 			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
 				return fmt.Errorf("'%s' in path '%s': catch-all routes are only allowed at the end of the path", path, full)
 			}
-			n.path, path = path, ""
+			n.handle, n.path, path = handle, path, ""
 
 		default:
 			if i = strings.IndexAny(path, ":*"); i != -1 {
@@ -78,7 +80,15 @@ func (n *node) construct(path, full string, handle XHandle) error {
 				n.children = make([]*node, 1)
 				n = n.children[0]
 			} else {
-				n.path, path = path, ""
+				n.handle, n.path, path = handle, path, ""
+				// There are two cases when create the tsr node of a static node,
+				// which is not like creating the tsr node of a param node, we only
+				// need to consider adding slash, because a slash isn't allowed in the
+				// path segment of a param node, but a static node allows it.
+				if path[len(path)-1] == '/' {
+					n.path = n.path[:len(n.path)-1]
+				}
+				n.children = []*node{&node{path: "/", tsr: true, index: '/', priority: 1, handle: handle}}
 			}
 		}
 	}
