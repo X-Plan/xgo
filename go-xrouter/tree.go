@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-07
+// Last Change: 2017-03-08
 
 package xrouter
 
@@ -37,6 +37,7 @@ func (n *node) add(path string, handle XHandle) error {
 		rest  string
 		child *node
 	)
+
 	return nil
 }
 
@@ -52,6 +53,9 @@ func (n *node) construct(path, full string, handle XHandle) error {
 		n.priority = 1
 
 		switch path[0] {
+		// If the node type of the current node is static or param,
+		// We need add a extra node called tsr node, which is used
+		// in 'get' function when the 'tsr' parameter is true.
 		case ':':
 			n.nt = param
 			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
@@ -76,7 +80,9 @@ func (n *node) construct(path, full string, handle XHandle) error {
 
 		default:
 			if i = strings.IndexAny(path, ":*"); i != -1 {
-				n.path, path = path[:i], path[i:]
+				// We only need set the 'index' field of a static node,
+				// there is no use for param node and all node.
+				n.path, n.index, path = path[:i], path[0], path[i:]
 				n.children = make([]*node, 1)
 				n = n.children[0]
 			} else {
@@ -144,7 +150,10 @@ outer:
 // Locate the approriate child node by index parameter.
 func (n *node) child(index byte) *node {
 	for _, c := range n.children {
-		if c.index == index {
+		// If the node tyoe of a child node is either param or all,
+		// the number of the children of a node must be equal to 1, we
+		// can directly return it. Otherwise have to compare the index.
+		if c.nt != static || c.index == index {
 			return c
 		}
 	}
