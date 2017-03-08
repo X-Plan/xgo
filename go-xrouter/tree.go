@@ -8,6 +8,7 @@
 package xrouter
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -25,7 +26,7 @@ type node struct {
 	index    byte
 	nt       nodeType
 	priority uint32
-	children []*node
+	children nodes
 	handle   XHandle
 }
 
@@ -33,15 +34,51 @@ type node struct {
 // a existing path, a error will be returned.
 func (n *node) add(path string, handle XHandle) error {
 	var (
-		i     int
-		rest  string
-		child *node
+		i    int
+		err  error
+		tail string
+		full = path
+		pn   *node
 	)
+
+outer:
+	for len(n.path) > 0 {
+		switch n.nt {
+		case static:
+			i = lcp(path, n.path)
+			path, tail = path[i:], n.path[i:]
+			if len(tail) > 0 {
+				// Split the static node.
+				child := &node{
+					path:     tail,
+					index:    tail[0],
+					priority: n.priority,
+					children: n.children,
+					handle:   n.handle,
+				}
+				n.path = n.path[:i]
+				n.priority++
+				n.children = []*node{child}
+				n.handle = handle
+				pn.resort()
+			} else {
+			}
+
+		case param:
+		case all:
+		}
+	}
+
+	if len(path) > 0 {
+		if err = n.construct(path, full, handle); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-// Init a empty node (not nil) from path parameter.
+// Init a empty node ('path' field is empty) from path parameter.
 func (n *node) construct(path, full string, handle XHandle) error {
 	var (
 		i int
@@ -158,6 +195,28 @@ func (n *node) child(index byte) *node {
 		}
 	}
 	return nil
+}
+
+// Resort the children by the priority.
+func (n *node) resort() {
+	if n != nil && !sort.IsSorted(n.children) {
+		sort.Sort(n.children)
+	}
+}
+
+type nodes []*node
+
+// Impelment sort.Interface.
+func (ns nodes) Len() int {
+	return len(ns)
+}
+
+func (ns nodes) Less(i, j int) bool {
+	return ns[i].priority > ns[j].priority
+}
+
+func (ns nodes) Swap(i, j int) {
+	ns[i], ns[j] = ns[j], ns[i]
 }
 
 func min(a, b int) int {
