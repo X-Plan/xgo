@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-08
+// Last Change: 2017-03-09
 
 package xrouter
 
@@ -34,11 +34,11 @@ type node struct {
 // a existing path, a error will be returned.
 func (n *node) add(path string, handle XHandle) error {
 	var (
-		i    int
-		err  error
-		tail string
-		full = path
-		pn   *node
+		i             int
+		err           error
+		tail          string
+		full          = path
+		parent, child *node
 	)
 
 outer:
@@ -58,10 +58,26 @@ outer:
 				}
 				n.path = n.path[:i]
 				n.priority++
-				n.children = []*node{child}
-				n.handle = handle
-				pn.resort()
+				parent.resort()
+
+				n.children = append(n.children, child)
+				if len(path) > 0 {
+					child = &node{}
+					n.children = append(n.children, child)
+					parent, n = n, child
+				}
+				break outer
 			} else {
+				if len(path) > 0 {
+					if child = n.child(path[0]); child != nil {
+						parent, n = n, child
+					} else if n.tsr {
+						// tsr node can be overwrote.
+						n.handle, n.tsr = handle, false
+					}
+					break outer
+				}
+				return fmt.Errorf("path '%s' has already been registered", path)
 			}
 
 		case param:
