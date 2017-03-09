@@ -71,16 +71,24 @@ outer:
 				if len(path) > 0 {
 					if child = n.child(path[0]); child != nil {
 						parent, n = n, child
+						continue
 					} else if n.tsr {
 						// tsr node can be overwrote.
 						n.handle, n.tsr = handle, false
+						break outer
 					}
-					break outer
 				}
 				return fmt.Errorf("path '%s' has already been registered", path)
 			}
 
 		case param:
+			i = lcp(path, n.path)
+			if i == len(n.path) && i < len(path) {
+				path = path[i:]
+				child = n.child(path[0])
+			} else {
+				return fmt.Errorf("'%s' in path '%s': conflict with the existing param '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
+			}
 		case all:
 		}
 	}
@@ -100,9 +108,11 @@ func (n *node) construct(path, full string, handle XHandle) error {
 		i int
 	)
 
+	// The initial path parameter must be not empty, it means the
+	// for-loop will be executed once at least.
 	for len(path) > 0 {
 		// The priority is always equal to 1, because all of the nodes
-		// in 'construct' function grow on a new branch of the trie.
+		// in 'construct' function grow on the new branch of a trie.
 		n.priority = 1
 
 		switch path[0] {
@@ -117,7 +127,19 @@ func (n *node) construct(path, full string, handle XHandle) error {
 				}
 				n.path, path = path[:i], path[i:]
 				n.children = make([]*node, 1)
-				n = n.children[0]
+				// Reach the end of the path, we need to consider how to
+				// expand a tsr node. In fact, I can redirect rest path
+				// to default branch, but it makes handling tsr node more
+				// complicated (at least for me), so I handle it at this.
+				if path == "/" {
+					n.handle = handle
+					n.tsr = true
+					n.children = &node{path: "/", index: '/', priority: 1, handle: handle}
+					path = ""
+				} else {
+					n = n.children[0]
+				}
+
 			} else {
 				n.handle, n.path, path = handle, path, ""
 				// create a tsr node.
@@ -133,21 +155,22 @@ func (n *node) construct(path, full string, handle XHandle) error {
 
 		default:
 			if i = strings.IndexAny(path, ":*"); i != -1 {
-				// We only need set the 'index' field of a static node,
+				// We only need to set the 'index' field of a static node,
 				// there is no use for param node and all node.
 				n.path, n.index, path = path[:i], path[0], path[i:]
-				n.children = make([]*node, 1)
+				n.children = []*node{&node{}}
 				n = n.children[0]
-			} else {
+			} else if len(path) > 1 {
 				n.handle, n.path, path = handle, path, ""
-				// There are two cases when create the tsr node of a static node,
-				// which is not like creating the tsr node of a param node, we only
-				// need to consider adding slash, because a slash isn't allowed in the
-				// path segment of a param node, but a static node allows it.
 				if path[len(path)-1] == '/' {
 					n.path = n.path[:len(n.path)-1]
 				}
 				n.children = []*node{&node{path: "/", tsr: true, index: '/', priority: 1, handle: handle}}
+			} else {
+				// Root path ("/") is a special case, we won't
+				// expand a tsr node of it, which means it's never
+				// be redirected.
+				n.handle, n.path, n.index, path = handle, "/", '/', ""
 			}
 		}
 	}
