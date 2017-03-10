@@ -64,7 +64,7 @@ func New(strs []string) (*XScheduler, error) {
 			xs.max = u.weight
 		}
 
-		// Find the greatest common divisor of the all weight.
+		// Find the greatest common divisor of the all weights.
 		if i != 0 {
 			delta = gcd(delta, u.weight)
 		} else {
@@ -79,6 +79,48 @@ func New(strs []string) (*XScheduler, error) {
 
 	xs.n, xs.i = len(xs.addrs), -1
 	return xs, nil
+}
+
+// Get the address from scheduler, this function is concurrent-safe.
+func (xs *XScheduler) Get() (string, error) {
+	var (
+		i, cw   int
+		u       *addrUnit
+		retry   = 2 * xs.n
+		address string
+	)
+
+	for retry > 0 {
+		xs.mtx.Lock()
+		xs.i = (xs.i + 1) % xs.n
+		if xs.i == 0 {
+			// We can directly use decrement operator, because we have
+			// already normalize the weight field (divided by gcd).
+			xs.cw--
+			if xs.cw <= 0 {
+				xs.cw = xs.max
+			}
+		}
+		i, cw = xs.i, xs.cw
+		xs.mtx.Unlock()
+
+		u = xs.addrs[i]
+		if u.IsAvailable() {
+			if u.weight >= cw {
+				return u.address, nil
+			}
+			address = u.address
+		}
+		retry--
+	}
+
+	// In high concurrent case, it's possible to can't satisfy condition
+	// 'u.weight >= cw' in all of the loops, so return the last address.
+	if address != "" {
+		return address, nil
+	} else {
+		return "", errors.New("all hosts are temporarily unavailable")
+	}
 }
 
 const (
@@ -101,6 +143,17 @@ type addrUnit struct {
 	sampleTime     time.Time
 	waitInterval   time.Duration
 	wakeupTime     time.Time
+}
+
+func (u *addrUnit) IsAvailable() bool {
+	u.rwmtx.RLock()
+	defer u.rwmtx.RUnlock()
+
+	if u.available || time.Now().After(u.wakeupTime) {
+		return true
+	} else {
+		return false
+	}
 }
 
 func newAddrUnit(str string) *addrUnit {
