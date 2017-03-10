@@ -22,8 +22,8 @@ import (
 type XScheduler struct {
 	addrs []*addrUnit
 	addrm map[string]*addrUnit
-	n     int
-	max   int
+	n     int // number of address items
+	max   int // max weight
 
 	mtx sync.Mutex
 	i   int
@@ -33,8 +33,8 @@ type XScheduler struct {
 // Create a new instance of XScheduler. The strs parameter is the collection
 // of server address, the format of address likes 'host:port:weight'. If the
 // weight field of the item is zero, this item will be ignored, but the weight
-// field is empty will return an error. Allow the multiple items have same
-// 'host:port' prefix.
+// field is empty will return an error. If the multiple items share the common
+// 'host:port' prefix, only the last nonzero-weight item can be used.
 func New(strs []string) (*XScheduler, error) {
 	var (
 		xs    = &XScheduler{addrm: make(map[string]*addrUnit)}
@@ -42,7 +42,43 @@ func New(strs []string) (*XScheduler, error) {
 	)
 
 	for i, str := range strs {
+		u := newAddrUnit(str)
+		if u == nil {
+			return nil, fmt.Errorf("invalid address (%s)", str)
+		}
+
+		// Although the zero-weight item is valid, but it will be ignored.
+		if u.weight == 0 {
+			continue
+		}
+
+		// If the addresses are duplicate, the new item will
+		// overwrite the old one.
+		if _, ok := xs.addrm[u.address]; ok {
+			xs.addrss = removeUnit(xs.addrs, u.address)
+		}
+		xs.addrs = append(xs.addrs, u)
+		xs.addrm[u.address] = u
+
+		if u.weight > xs.max {
+			xs.max = u.weight
+		}
+
+		// Find the greatest common divisor of the all weight.
+		if i != 0 {
+			delta = gcd(delta, u.weight)
+		} else {
+			delta = u.weight
+		}
 	}
+
+	for _, u := range xs.addrs {
+		u.weight = u.weight / delta
+	}
+	xs.max = xs.max / delta
+
+	xs.n, xs.i = len(xs.addrs), -1
+	return xs, nil
 }
 
 const (
@@ -106,6 +142,21 @@ func newAddrUnit(str string) *addrUnit {
 	}
 
 	return u
+}
+
+func removeUnit(addrs []*addrUnit, address string) []*addrUnit {
+	var (
+		i int
+		u *addrUnit
+	)
+
+	for i, u = range addrs {
+		if u.address == address {
+			break
+		}
+	}
+
+	return append(addrs[:i], addrs[i+1:]...)
 }
 
 // Greatest common divisor.
