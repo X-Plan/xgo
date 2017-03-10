@@ -31,7 +31,8 @@ type node struct {
 }
 
 // Register a new handle with the given path. If the path conflicts with
-// a existing path, a error will be returned.
+// a existing path, a error will be returned. path need to be noempty,
+// otherwise anything won't happen, include error.
 func (n *node) add(path string, handle XHandle) error {
 	var (
 		i             int
@@ -41,6 +42,8 @@ func (n *node) add(path string, handle XHandle) error {
 		parent, child *node
 	)
 
+	// NOTE: Because the value of static is equal to zero,
+	// so I never explicitly set it.
 outer:
 	for len(path) > 0 {
 		switch n.nt {
