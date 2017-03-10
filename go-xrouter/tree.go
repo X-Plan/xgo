@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-09
+// Last Change: 2017-03-10
 
 package xrouter
 
@@ -42,7 +42,7 @@ func (n *node) add(path string, handle XHandle) error {
 	)
 
 outer:
-	for len(n.path) > 0 {
+	for len(path) > 0 {
 		switch n.nt {
 		case static:
 			i = lcp(path, n.path)
@@ -67,35 +67,39 @@ outer:
 					parent, n = n, child
 				}
 				break outer
-			} else {
-				if len(path) > 0 {
-					if child = n.child(path[0]); child != nil {
-						parent, n = n, child
-						continue
-					} else if n.tsr {
-						// tsr node can be overwrote.
-						n.handle, n.tsr = handle, false
-						break outer
-					}
-				}
+			} else if len(path) == 0 && !n.tsr {
 				return fmt.Errorf("path '%s' has already been registered", path)
 			}
-
 		case param:
 			i = lcp(path, n.path)
 			if i == len(n.path) && i < len(path) {
 				path = path[i:]
-				child = n.child(path[0])
-			} else {
-				return fmt.Errorf("'%s' in path '%s': conflict with the existing param '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
+			} else if !n.tsr {
+				return fmt.Errorf("'%s' in path '%s': conflict with the existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 			}
 		case all:
+			return fmt.Errorf("'%s' in path '%s': conflict with the existing catch-all wildcard '%s' in prefix '%s' ", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 		}
-	}
 
-	if len(path) > 0 {
-		if err = n.construct(path, full, handle); err != nil {
-			return err
+		if !n.tsr {
+			if child = n.child(path[0]); child != nil {
+				parent, n = n, child
+				continue
+			} else {
+				child := &node{}
+				if err = child.construct(path, full, handle); err != nil {
+					return err
+				}
+				n.priority++
+				parent.resort()
+				// We don't need to invoke n.resort, because the priority
+				// of the 'child' node is minimum (equal to 1).
+				n.children = append(n.children, child)
+				break outer
+			}
+		} else {
+			n.handle, n.tsr = handle, false
+			break outer
 		}
 	}
 
@@ -128,8 +132,8 @@ func (n *node) construct(path, full string, handle XHandle) error {
 				n.path, path = path[:i], path[i:]
 				n.children = make([]*node, 1)
 				// Reach the end of the path, we need to consider how to
-				// expand a tsr node. In fact, I can redirect rest path
-				// to default branch, but it makes handling tsr node more
+				// expand a tsr node. In fact, I can redirect the rest path
+				// to the default branch, but it makes handling tsr node more
 				// complicated (at least for me), so I handle it at this.
 				if path == "/" {
 					n.handle = handle
