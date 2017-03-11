@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-10
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-10
+// Last Change: 2017-03-12
 
 // go-xsched is a scheduler for load balancing, the implementation of it
 // is based on weight round-robin algorithm, it's concurrent-safe too.
@@ -55,7 +55,7 @@ func New(strs []string) (*XScheduler, error) {
 		// If the addresses are duplicate, the new item will
 		// overwrite the old one.
 		if _, ok := xs.addrm[u.address]; ok {
-			xs.addrss = removeUnit(xs.addrs, u.address)
+			xs.addrs = removeUnit(xs.addrs, u.address)
 		}
 		xs.addrs = append(xs.addrs, u)
 		xs.addrm[u.address] = u
@@ -123,26 +123,34 @@ func (xs *XScheduler) Get() (string, error) {
 	}
 }
 
+// Feedback the result of an operation on special address, true
+// represent success, false represent failure.
+func (xs *XScheduler) Feedback(address string, result bool) {
+	if u, ok := xs.addrm[address]; ok {
+		u.Feedback(result)
+	}
+}
+
 const (
-	zeroInterval      = time.Duration(0)
-	minSampleInterval = 2 * time.Second
-	maxSampleInterval = 32 * time.Second
-	minWaitInterval   = 2 * time.Second
-	maxWaitInterval   = 128 * time.Second
+	zeroInterval    = time.Duration(0)
+	minSamplePeriod = 2 * time.Second
+	maxSamplePeriod = 32 * time.Second
+	minWaitInterval = 2 * time.Second
+	maxWaitInterval = 128 * time.Second
 )
 
 type addrUnit struct {
 	address string
 	weight  int
 
-	rwmtx          sync.RWMutex
-	available      bool
-	total          int
-	fail           int
-	sampleInterval time.Duration
-	sampleTime     time.Time
-	waitInterval   time.Duration
-	wakeupTime     time.Time
+	rwmtx        sync.RWMutex
+	available    bool
+	total        int
+	fail         int
+	samplePeriod time.Duration
+	sampleTime   time.Time
+	waitInterval time.Duration
+	wakeupTime   time.Time
 }
 
 func (u *addrUnit) IsAvailable() bool {
@@ -153,6 +161,74 @@ func (u *addrUnit) IsAvailable() bool {
 		return true
 	} else {
 		return false
+	}
+}
+
+// Call this function is similar to sample, the sampling period
+// is controlled by the 'samplePeriod' field. When the duration
+// of sampling exceeds the 'samplePeriod', this function will
+// evaluate the fail rate (fail number divided by total number).
+// If the fail rate is greater than ten percent, this address will
+// be marked unavailable (affect 'Get' function). But it doesn't
+// mean the address always remain unavailable. After waiting
+// some time (controlled by the 'waitInterval' field), it will be
+// awaked.
+func (u *addrUnit) Feedback(result bool) {
+	u.rwmtx.Lock()
+	defer u.rwmtx.Unlock()
+
+	u.total++
+	if !result {
+		u.fail++
+	}
+
+	now := time.Now()
+	if now.After(u.sampleTime) {
+		var failRate float64
+		if u.total > 0 {
+			failRate = float64(u.fail) / float64(u.total)
+		}
+
+		if failRate < 0.1 {
+			u.available = true
+
+			// 'samplePeriod' and 'waitInterval' is not static. when the
+			// number of failures increases, the 'samplePeriod' will decrease
+			// and 'waitInterval' will also increase. Why we do this is
+			// based on the assumption: the more times it fails, the more
+			// likely it will fail next time. So if we want to minimize the
+			// effect of fail, we should decrease 'samplePeriod' and increase
+			// 'waitInterval'.
+			if u.samplePeriod < maxSamplePeriod {
+				u.samplePeriod <<= 1 // Divided 2
+			}
+
+			if u.waitInterval > minWaitInterval {
+				u.waitInterval >>= 1 // Times 2
+			}
+		} else {
+			u.available = false
+
+			if u.samplePeriod > minSamplePeriod {
+				u.samplePeriod >>= 1
+			}
+
+			if u.waitInterval < maxWaitInterval {
+				u.waitInterval <<= 1
+			}
+			// Only in the case of failure, set 'wakeupTime' field.
+			u.wakeupTime = now.Add(u.waitInterval)
+		}
+
+		if u.available {
+			u.sampleTime = now.Add(u.samplePeriod)
+		} else {
+			// If the current state is unavailable, the calculation of
+			// 'sampleTime' should be based on 'wakeupTime'.
+			u.sampleTime = u.wakeupTime.Add(u.samplePeriod)
+		}
+
+		u.total, u.fail = 0, 0
 	}
 }
 
@@ -186,12 +262,12 @@ func newAddrUnit(str string) *addrUnit {
 	}
 
 	u := &addrUnit{
-		address:        strs[0] + ":" + strs[1],
-		weight:         int(w),
-		available:      true,
-		sampleInterval: maxSampleInterval,
-		waitInterval:   minWaitInterval,
-		sampleTime:     time.Now().Add(maxSampleInterval),
+		address:      strs[0] + ":" + strs[1],
+		weight:       int(w),
+		available:    true,
+		samplePeriod: maxSamplePeriod,
+		waitInterval: minWaitInterval,
+		sampleTime:   time.Now().Add(maxSamplePeriod),
 	}
 
 	return u
