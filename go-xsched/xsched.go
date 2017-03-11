@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const Version = "1.0.0"
+
 type XScheduler struct {
 	addrs []*addrUnit
 	addrm map[string]*addrUnit
