@@ -41,13 +41,13 @@ func createBackendServer(n int) (bs []*httptest.Server) {
 		bs = append(bs, func(i int, src rand.Source) *httptest.Server {
 			return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Sometimes return 500.
-				result := src.Int63()%10 == 0
-				if result {
+				result := !(src.Int63()%10 == 0)
+				if !result {
 					w.WriteHeader(500)
 				}
-				fmt.Fprintln(w, "I'm backend server %d (result: %v)", i, result)
+				fmt.Fprintf(w, "I'm backend server %d (result: %v)\n", i, result)
 			}))
-		}(i, rand.NewSource(int64(i))))
+		}(i, rand.NewSource(int64(1000*i))))
 	}
 	return
 }
@@ -77,7 +77,8 @@ func main() {
 			address, _ := xs.Get()
 			// Change the destination host of the request, this field
 			// also be used in 'Transport.RoundTrip' method.
-			r.Host = address
+			r.URL.Scheme = "http"
+			r.URL.Host = address
 		},
 		Transport: &Transport{http.DefaultTransport, xs},
 	}
