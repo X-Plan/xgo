@@ -49,28 +49,11 @@ outer:
 		switch n.nt {
 		case static:
 			i = lcp(path, n.path)
-			path, tail = path[i:], n.path[i:]
-			if len(tail) > 0 {
-				// Split the static node.
-				child := &node{
-					path:     tail,
-					index:    tail[0],
-					priority: n.priority,
-					children: n.children,
-					handle:   n.handle,
+			if i > 0 && i < len(n.path) {
+				if path = n.split(i, path, handle); len(path) == 0 {
+					break outer
 				}
-				n.path = n.path[:i]
-				n.priority++
-				parent.resort()
-
-				n.children = append(n.children, child)
-				if len(path) > 0 {
-					child = &node{}
-					n.children = append(n.children, child)
-					parent, n = n, child
-				}
-				break outer
-			} else if len(path) == 0 && !n.tsr {
+			} else if i == len(path) && !n.tsr {
 				return fmt.Errorf("path '%s' has already been registered", path)
 			}
 		case param:
@@ -87,6 +70,8 @@ outer:
 
 		if len(path) > 0 {
 			if child = n.child(path[0]); child != nil {
+				n.priority++
+				parent.resort()
 				parent, n = n, child
 				continue
 			} else {
@@ -182,6 +167,18 @@ func (n *node) construct(path, full string, handle XHandle) error {
 			}
 		}
 	}
+}
+
+// Split the static node.
+func (n *node) split(i int, path string, handle XHandle) string {
+	// 'i' must greater than zero.
+	path, tail = path[i:], n.path[i:]
+
+	if len(path) > 0 {
+	} else {
+	}
+
+	return path
 }
 
 // Returns the handle registered with the given path. The values of wildcards
