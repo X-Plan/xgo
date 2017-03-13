@@ -106,6 +106,8 @@ func (n *node) construct(path, full string, handle XHandle) error {
 	for len(path) > 0 {
 		// The priority is always equal to 1, because all of the nodes
 		// in 'construct' function grow on the new branch of a trie.
+		// NOTE: This don't affect tsr node, the priority of the tsr node
+		// is equal to zero.
 		n.priority = 1
 
 		switch path[0] {
@@ -114,35 +116,33 @@ func (n *node) construct(path, full string, handle XHandle) error {
 		// in 'get' function when the 'tsr' parameter is true.
 		case ':':
 			n.nt = param
-			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
+			if i = strings.IndexAny(path[1:], ":*/"); i > 0 {
 				if path[i] != '/' {
 					return fmt.Errorf("'%s' in path '%s': only one wildcard per path segment is allowed", path, full)
 				}
 				n.path, path = path[:i], path[i:]
-				n.children = make([]*node, 1)
-				// Reach the end of the path, we need to consider how to
-				// expand a tsr node. In fact, I can redirect the rest path
-				// to the default branch, but it makes handling tsr node more
-				// complicated (at least for me), so I handle it at this.
 				if path == "/" {
-					n.handle = handle
-					n.tsr = true
-					n.children = &node{path: "/", index: '/', priority: 1, handle: handle}
-					path = ""
-				} else {
-					n = n.children[0]
+					n.tsr, n.handle = true, handle
 				}
 
-			} else {
+				n.children = []*node{&node{}}
+				n = n.children[0]
+
+			} else if i == -1 && len(path) > 1 {
+				// Reach the end of the path, the last byte is not '/'.
+				// index field doesn't make sense to param node.
 				n.handle, n.path, path = handle, path, ""
-				// create a tsr node.
-				n.children = []*node{&node{path: "/", tsr: true, index: '/', priority: 1, handle: handle}}
+				n.children = []*node{&node{path: "/", tsr: true, index: '/', handle: handle}}
+			} else {
+				return fmt.Errorf("'%s' in path '%s': param wildcard can't be empty", path, full)
 			}
 
 		case '*':
 			n.nt = all
 			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
 				return fmt.Errorf("'%s' in path '%s': catch-all routes are only allowed at the end of the path", path, full)
+			} else if len(path) == 1 {
+				return fmt.Errorf("'%s' in path '%s': catch-all wildcard can't be empty", path, full)
 			}
 			n.handle, n.path, path = handle, path, ""
 
@@ -150,20 +150,20 @@ func (n *node) construct(path, full string, handle XHandle) error {
 			if i = strings.IndexAny(path, ":*"); i != -1 {
 				// We only need to set the 'index' field of a static node,
 				// there is no use for param node and all node.
-				n.path, n.index, path = path[:i], path[0], path[i:]
-				n.children = []*node{&node{}}
+				n.path, n.index, n.children, path = path[:i], path[0], []*node{&node{}}, path[i:]
 				n = n.children[0]
-			} else if len(path) > 1 {
-				n.handle, n.path, path = handle, path, ""
-				if path[len(path)-1] == '/' {
-					n.path = n.path[:len(n.path)-1]
+			} else if path[len(path)-1] == '/' {
+				// Reach the end of the path, the last byte is '/'.
+				if len(path) > 1 {
+					n.handle, n.path, n.index, n.tsr = handle, path[:len(path)-1], path[0], true
+					n.children = []*node{&node{}}
+					n = n.children[0]
 				}
-				n.children = []*node{&node{path: "/", tsr: true, index: '/', priority: 1, handle: handle}}
-			} else {
-				// Root path ("/") is a special case, we won't
-				// expand a tsr node of it, which means it's never
-				// be redirected.
 				n.handle, n.path, n.index, path = handle, "/", '/', ""
+			} else {
+				// Reach the end of the path, the last byte is not '/'.
+				n.handle, n.path, n.index, path = handle, path, path[0], ""
+				n.children = []*node{&node{path: "/", tsr: true, index: '/', handle: handle}}
 			}
 		}
 	}
@@ -175,6 +175,12 @@ func (n *node) split(i int, path string, handle XHandle) string {
 	path, tail = path[i:], n.path[i:]
 
 	if len(path) > 0 {
+		child := *n
+		child.path, child.index = tail, tail[0]
+		n.path, n.children = n.path[:i], []*node{&child}
+		if path == "/" {
+			n.tsr = true
+		}
 	} else {
 	}
 
