@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-10
+// Last Change: 2017-03-13
 
 package xrouter
 
@@ -77,14 +77,15 @@ outer:
 			i = lcp(path, n.path)
 			if i == len(n.path) && i < len(path) {
 				path = path[i:]
-			} else if !n.tsr {
+			} else if i != len(n.path) || !n.tsr {
 				return fmt.Errorf("'%s' in path '%s': conflict with the existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 			}
+
 		case all:
 			return fmt.Errorf("'%s' in path '%s': conflict with the existing catch-all wildcard '%s' in prefix '%s' ", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 		}
 
-		if !n.tsr {
+		if len(path) > 0 {
 			if child = n.child(path[0]); child != nil {
 				parent, n = n, child
 				continue
