@@ -22,6 +22,10 @@ func TestConstructCorrect(t *testing.T) {
 	printNode(n, 0)
 
 	n = &node{}
+	xassert.IsNil(t, n.construct("/", "full path", handle))
+	printNode(n, 0)
+
+	n = &node{}
 	xassert.IsNil(t, n.construct(":hello/world/path", "full path", handle))
 	printNode(n, 0)
 
