@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// Test 'node.construct' function, but the 'path' is valid.
+// Test 'node.construct' function, and the 'path' is valid.
 func TestConstructCorrect(t *testing.T) {
 	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
 	xassert.IsNil(t, n.construct("/who/are/you/?", "full path", handle))
@@ -30,12 +30,43 @@ func TestConstructCorrect(t *testing.T) {
 	printNode(n, 0)
 
 	n = &node{}
+	xassert.IsNil(t, n.construct("he:llo/world/pa*th", "full path", handle))
+	printNode(n, 0)
+
+	n = &node{}
 	xassert.IsNil(t, n.construct("h:ello/wo:rld/path/", "full path", handle))
 	printNode(n, 0)
 
 	n = &node{}
 	xassert.IsNil(t, n.construct("h:ello/wo:rld/pa:th/", "full path", handle))
 	printNode(n, 0)
+}
+
+// Test 'node.construct' function, but the 'path' is invalid.
+func TestConstructError(t *testing.T) {
+	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
+	xassert.Match(t, n.construct("/who/are/y*ou/", "full path", handle),
+		`'\*ou' in path 'full path': catch-all routes are only allowed at the end of the path`)
+
+	n = &node{}
+	xassert.Match(t, n.construct("/who/are/you*", "full path", handle),
+		`'\*' in path 'full path': catch-all wildcard can't be empty`)
+
+	n = &node{}
+	xassert.Match(t, n.construct(":hello/wor:ld/Who:are:you/Am/I/alone", "full path", handle),
+		`':are:you/Am/I/alone' in path 'full path': only one wildcard per path segment is allowed`)
+
+	n = &node{}
+	xassert.Match(t, n.construct("hello/wo:rld*xxx/aaa", "full path", handle),
+		`':rld\*xxx/aaa' in path 'full path': only one wildcard per path segment is allowed`)
+
+	n = &node{}
+	xassert.Match(t, n.construct("hello/wo*rld:xxx/aaa", "full path", handle),
+		`'\*rld' in path 'full path': catch-all routes are only allowed at the end of the path`)
+
+	n = &node{}
+	xassert.Match(t, n.construct("hello:/world", "full path", handle),
+		`':/world' in path 'full path': param wildcard can't be empty`)
 }
 
 // Print node in tree-text format.

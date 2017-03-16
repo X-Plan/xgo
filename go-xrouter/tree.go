@@ -149,7 +149,7 @@ func (n *node) construct(path, full string, handle XHandle) error {
 		case '*':
 			n.nt = all
 			if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
-				return fmt.Errorf("'%s' in path '%s': catch-all routes are only allowed at the end of the path", path, full)
+				return fmt.Errorf("'%s' in path '%s': catch-all routes are only allowed at the end of the path", path[:i+1], full)
 			} else if len(path) == 1 {
 				return fmt.Errorf("'%s' in path '%s': catch-all wildcard can't be empty", path, full)
 			}
