@@ -15,6 +15,12 @@ import (
 
 type nodeType uint8
 
+var nodeTypeStr = [3]string{"static", "param", "catch-all"}
+
+func (nt nodeType) String() string {
+	return nodeTypeStr[int(nt)]
+}
+
 const (
 	static nodeType = iota // default node type
 	param                  // ':name' wildcard node type
@@ -117,6 +123,9 @@ func (n *node) construct(path, full string, handle XHandle) error {
 		case ':':
 			n.nt = param
 			if i = strings.IndexAny(path[1:], ":*/"); i > 0 {
+				// NOTE: 'i' is based on 'path[1:]', not 'path', so
+				// we have got to add 1 to it.
+				i++
 				if path[i] != '/' {
 					return fmt.Errorf("'%s' in path '%s': only one wildcard per path segment is allowed", path, full)
 				}
