@@ -3,11 +3,12 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-13
+// Last Change: 2017-03-16
 
 package xrouter
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -37,7 +38,6 @@ func (n *node) add(path string, handle XHandle) error {
 	var (
 		i             int
 		err           error
-		tail          string
 		full          = path
 		parent, child *node
 	)
@@ -167,12 +167,14 @@ func (n *node) construct(path, full string, handle XHandle) error {
 			}
 		}
 	}
+
+	return nil
 }
 
 // Split the static node.
 func (n *node) split(i int, path string, handle XHandle) string {
 	// 'i' must greater than zero.
-	path, tail = path[i:], n.path[i:]
+	path, tail := path[i:], n.path[i:]
 
 	if len(path) > 0 {
 		child := *n

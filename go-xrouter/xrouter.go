@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-02-27
+// Last Change: 2017-03-16
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -11,6 +11,10 @@
 // but you can delete an existing handler without creating a new route. I think
 // it's useful in some scenarios which you want to  modify route dynamically.
 package xrouter
+
+import (
+	"net/http"
+)
 
 // XHandle is a function that can be registered to a route to handle HTTP
 // requests. Like http.HandleFunc, but has a third parameter for the values
