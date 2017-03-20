@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-16
+// Last Change: 2017-03-20
 
 package xrouter
 
@@ -56,10 +56,12 @@ outer:
 		case static:
 			i = lcp(path, n.path)
 			if i > 0 && i < len(n.path) {
-				if path = n.split(i, path, handle); len(path) == 0 {
+				if path = n.split(parent, i, path, handle); len(path) == 0 {
 					break outer
 				}
-			} else if i == len(path) && !n.tsr {
+			} else if i < len(path) {
+				path = path[i:]
+			} else if i == len(path) && n.handle != nil && !n.tsr {
 				return fmt.Errorf("path '%s' has already been registered", path)
 			}
 		case param:
@@ -181,18 +183,48 @@ func (n *node) construct(path, full string, handle XHandle) error {
 }
 
 // Split the static node.
-func (n *node) split(i int, path string, handle XHandle) string {
-	// 'i' must greater than zero.
-	path, tail := path[i:], n.path[i:]
+func (n *node) split(parent *node, i int, path string, handle XHandle) string {
+	// 'i' must greater than zero and less than the length of 'n.path'.
+	child := *n
+	path, child.path, child.index = path[i:], n.path[i:], n.path[i]
 
 	if len(path) > 0 {
-		child := *n
-		child.path, child.index = tail, tail[0]
+		// The priority needn't be increased, it will be
+		// handled by the parent function.
 		n.path, n.children = n.path[:i], []*node{&child}
 		if path == "/" {
-			n.tsr = true
+			n.tsr, n.handle = true, handle
 		}
 	} else {
+		n.priority, n.handle = n.priority+1, handle
+
+		if n.path[i-1] == '/' {
+			if i > 1 {
+				n.path, n.tsr = n.path[:i-1], true
+				n.children = []*node{&node{path: "/", index: '/', handle: handle, children: []*node{&child}}}
+			} else if parent != nil {
+				// In fact, the handle of parent must be nil, unless
+				// I make a mistake (In this case, path must be equal
+				// to "/").
+				n.path, n.children = "/", []*node{&child}
+				parent.tsr, parent.handle = true, handle
+			}
+		} else if n.path[i] == '/' {
+			n.path = n.path[:i]
+			if len(child.path) > 1 {
+				child.path, child.index = child.path[1:], child.path[1]
+				n.children = []*node{&node{path: "/", index: '/', tsr: true, handle: handle, children: []*node{&child}}}
+			} else {
+				// In this case, 'child.path' is equal to "/".
+				child.tsr, child.handle = true, handle
+				n.children = []*node{&child}
+			}
+		} else {
+			n.path, n.children = n.path[:i], []*node{
+				&child,
+				&node{path: "/", tsr: true, index: '/', handle: handle},
+			}
+		}
 	}
 
 	return path
