@@ -1,4 +1,4 @@
-#go-xassert
+# go-xassert
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
 ![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)
