@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-20
+// Last Change: 2017-03-21
 
 package xrouter
 
@@ -114,8 +114,8 @@ func (n *node) construct(path, full string, handle XHandle) error {
 	for len(path) > 0 {
 		// The priority is always equal to 1, because all of the nodes
 		// in 'construct' function grow on the new branch of a trie.
-		// NOTE: This don't affect tsr node, the priority of the tsr node
-		// is equal to zero.
+		// NOTE: This don't affect tsr node, the contribution of the
+		// tsr node to priority is zero.
 		n.priority = 1
 
 		switch path[0] {
@@ -167,7 +167,7 @@ func (n *node) construct(path, full string, handle XHandle) error {
 				// Reach the end of the path, the last byte is '/'.
 				if len(path) > 1 {
 					n.handle, n.path, n.index, n.tsr = handle, path[:len(path)-1], path[0], true
-					n.children = []*node{&node{}}
+					n.children = []*node{&node{priority: n.priority}}
 					n = n.children[0]
 				}
 				n.handle, n.path, n.index, path = handle, "/", '/', ""
@@ -186,7 +186,7 @@ func (n *node) construct(path, full string, handle XHandle) error {
 func (n *node) split(parent *node, i int, path string, handle XHandle) string {
 	// 'i' must greater than zero and less than the length of 'n.path'.
 	child := *n
-	path, child.path, child.index = path[i:], n.path[i:], n.path[i]
+	n.tsr, path, child.path, child.index = false, path[i:], n.path[i:], n.path[i]
 
 	if len(path) > 0 {
 		// The priority needn't be increased, it will be
@@ -213,7 +213,7 @@ func (n *node) split(parent *node, i int, path string, handle XHandle) string {
 			n.path = n.path[:i]
 			if len(child.path) > 1 {
 				child.path, child.index = child.path[1:], child.path[1]
-				n.children = []*node{&node{path: "/", index: '/', tsr: true, handle: handle, children: []*node{&child}}}
+				n.children = []*node{&node{path: "/", index: '/', tsr: true, handle: handle, priority: child.priority, children: []*node{&child}}}
 			} else {
 				// In this case, 'child.path' is equal to "/".
 				child.tsr, child.handle = true, handle

@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-16
+// Last Change: 2017-03-21
 
 package xrouter
 
@@ -17,33 +17,24 @@ import (
 
 // Test 'node.construct' function, and the 'path' is valid.
 func TestConstructCorrect(t *testing.T) {
-	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-	xassert.IsNil(t, n.construct("/who/are/you/?", "full path", handle))
-	printNode(n, 0)
+	var paths = []string{
+		"/who/are/you/?",
+		"/",
+		":hello/world/path",
+		"he:llo/world/*path",
+		"he:llo/world/*path",
+		"he:llo/world/pa*th",
+		"h:ello/wo:rld/path/",
+		"h:ello/wo:rld/pa:th/",
+		"h:ello/w:orld/pa:th",
+		"h:ello/w:orld/path",
+	}
 
-	n = &node{}
-	xassert.IsNil(t, n.construct("/", "full path", handle))
-	printNode(n, 0)
-
-	n = &node{}
-	xassert.IsNil(t, n.construct(":hello/world/path", "full path", handle))
-	printNode(n, 0)
-
-	n = &node{}
-	xassert.IsNil(t, n.construct("he:llo/world/*path", "full path", handle))
-	printNode(n, 0)
-
-	n = &node{}
-	xassert.IsNil(t, n.construct("he:llo/world/pa*th", "full path", handle))
-	printNode(n, 0)
-
-	n = &node{}
-	xassert.IsNil(t, n.construct("h:ello/wo:rld/path/", "full path", handle))
-	printNode(n, 0)
-
-	n = &node{}
-	xassert.IsNil(t, n.construct("h:ello/wo:rld/pa:th/", "full path", handle))
-	printNode(n, 0)
+	for _, path := range paths {
+		n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
+		xassert.IsNil(t, n.construct(path, "full path", handle))
+		printNode(n, 0)
+	}
 }
 
 // Test 'node.construct' function, but the 'path' is invalid.
@@ -71,6 +62,39 @@ func TestConstructError(t *testing.T) {
 	n = &node{}
 	xassert.Match(t, n.construct("hello:/world", "full path", handle),
 		`':/world' in path 'full path': param wildcard can't be empty`)
+}
+
+func TestSplit(t *testing.T) {
+	// The 'original' field and the 'n.path' need have a common
+	// prefix, but it should be the substring of the 'n.path'
+	// (can't be equal to the 'n.path'), otherwise the initial
+	// condition of the 'n.split' function can't be statisfied.
+	var paths = []struct {
+		original string
+		rest     string
+		priority int
+	}{
+		{"/who/is/she", "is/she", 1},
+		{"/who/are you?", " you?", 1},
+		{"/how/are/you/?", "how/are/you/?", 1},
+		{"/who/a", "", 2},
+		{"/who", "", 2},
+	}
+
+	// Only print once.
+	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
+	xassert.IsNil(t, n.construct("/who/are/you/?/", "full path", handle))
+	printNode(n, 0)
+
+	newhandle := func(http.ResponseWriter, *http.Request, XParams) {}
+	for _, path := range paths {
+		n = &node{}
+		xassert.IsNil(t, n.construct("/who/are/you/?/", "full path", handle))
+		i := lcp(path.original, n.path)
+		xassert.Match(t, n.split(nil, i, path.original, newhandle), path.rest)
+		xassert.Equal(t, int(n.priority), path.priority)
+		printNode(n, 0)
+	}
 }
 
 // Print node in tree-text format.
