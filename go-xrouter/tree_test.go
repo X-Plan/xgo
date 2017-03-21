@@ -39,29 +39,22 @@ func TestConstructCorrect(t *testing.T) {
 
 // Test 'node.construct' function, but the 'path' is invalid.
 func TestConstructError(t *testing.T) {
-	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-	xassert.Match(t, n.construct("/who/are/y*ou/", "full path", handle),
-		`'\*ou' in path 'full path': catch-all routes are only allowed at the end of the path`)
+	var paths = []struct {
+		path   string
+		reason string
+	}{
+		{"/who/are/y*ou/", `'\*ou' in path 'full path': catch-all routes are only allowed at the end of the path`},
+		{"/who/are/you*", `'\*' in path 'full path': catch-all wildcard can't be empty`},
+		{":hello/wor:ld/Who:are:you/Am/I/alone", `':are:you/Am/I/alone' in path 'full path': only one wildcard per path segment is allowed`},
+		{"hello/wo:rld*xxx/aaa", `':rld\*xxx/aaa' in path 'full path': only one wildcard per path segment is allowed`},
+		{"hello/wo*rld:xxx/aaa", `'\*rld' in path 'full path': catch-all routes are only allowed at the end of the path`},
+		{"hello:/world", `':/world' in path 'full path': param wildcard can't be empty`},
+	}
 
-	n = &node{}
-	xassert.Match(t, n.construct("/who/are/you*", "full path", handle),
-		`'\*' in path 'full path': catch-all wildcard can't be empty`)
-
-	n = &node{}
-	xassert.Match(t, n.construct(":hello/wor:ld/Who:are:you/Am/I/alone", "full path", handle),
-		`':are:you/Am/I/alone' in path 'full path': only one wildcard per path segment is allowed`)
-
-	n = &node{}
-	xassert.Match(t, n.construct("hello/wo:rld*xxx/aaa", "full path", handle),
-		`':rld\*xxx/aaa' in path 'full path': only one wildcard per path segment is allowed`)
-
-	n = &node{}
-	xassert.Match(t, n.construct("hello/wo*rld:xxx/aaa", "full path", handle),
-		`'\*rld' in path 'full path': catch-all routes are only allowed at the end of the path`)
-
-	n = &node{}
-	xassert.Match(t, n.construct("hello:/world", "full path", handle),
-		`':/world' in path 'full path': param wildcard can't be empty`)
+	for _, p := range paths {
+		n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
+		xassert.Match(t, n.construct(p.path, "full path", handle), p.reason)
+	}
 }
 
 func TestSplit(t *testing.T) {
