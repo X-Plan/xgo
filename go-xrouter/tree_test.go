@@ -62,32 +62,35 @@ func TestSplit(t *testing.T) {
 	// prefix, but it should be the substring of the 'n.path'
 	// (can't be equal to the 'n.path'), otherwise the initial
 	// condition of the 'n.split' function can't be statisfied.
-	var paths = []struct {
+	var examples = [][]struct {
 		original string
 		rest     string
 		priority int
+		handle   XHandle
 	}{
-		{"begin/who/is/she", "is/she", 1},
-		{"begin/who/are you?", " you?", 1},
-		{"begin/how/are/you/?", "how/are/you/?", 1},
-		{"begin/who/a", "", 2},
-		{"begin/who", "", 2},
-		{"begin/", "", 2},
+		{{"begin/who/is/she", "is/she", 1, nil}},
+		{{"begin/who/are you?", " you?", 1, nil}},
+		{{"begin/how/are/you/?", "how/are/you/?", 1, nil}},
+		{{"begin/who/a", "", 2, nil}},
+		{{"begin/who", "", 2, nil}},
+		{{"begin/", "", 2, nil}},
+		{{"begin/who/is/he", "is/he", 1, nil}, {"begin/who", "", 2, nil}, {"beg", "", 3, nil}},
 	}
 
-	// Only print once.
-	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-	xassert.IsNil(t, n.construct("begin/who/are/you/?/", "full path", handle))
-	printNode(n, 0)
+	var (
+		n      *node
+		handle = func(http.ResponseWriter, *http.Request, XParams) {}
+	)
 
-	newhandle := func(http.ResponseWriter, *http.Request, XParams) {}
-	for _, path := range paths {
+	for _, e := range examples {
 		n = &node{}
 		xassert.IsNil(t, n.construct("begin/who/are/you/?/", "full path", handle))
-		i := lcp(path.original, n.path)
-		xassert.Match(t, n.split(nil, i, path.original, newhandle), path.rest)
-		xassert.Equal(t, int(n.priority), path.priority)
-		printNode(n, 0)
+		for _, p := range e {
+			p.handle = func(http.ResponseWriter, *http.Request, XParams) {}
+			xassert.Match(t, n.split(nil, lcp(p.original, n.path), p.original, p.handle), p.rest)
+			xassert.Equal(t, int(n.priority), p.priority)
+			printNode(n, 0)
+		}
 	}
 }
 
