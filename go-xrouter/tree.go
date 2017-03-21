@@ -39,7 +39,8 @@ type node struct {
 
 // Register a new handle with the given path. If the path conflicts with
 // a existing path, a error will be returned. path need to be noempty,
-// otherwise anything won't happen, include error.
+// otherwise anything won't happen, include error. The first byte of the
+// path should be slash ('/').
 func (n *node) add(path string, handle XHandle) error {
 	var (
 		i             int
@@ -82,7 +83,7 @@ outer:
 				parent.resort()
 				parent, n = n, child
 				continue
-			} else {
+			} else if len(n.path) > 0 {
 				child := &node{}
 				if err = child.construct(path, full, handle); err != nil {
 					return err
@@ -92,6 +93,12 @@ outer:
 				// We don't need to invoke n.resort, because the priority
 				// of the 'child' node is minimum (equal to 1).
 				n.children = append(n.children, child)
+				break outer
+			} else {
+				// Root node.
+				if err = n.construct(path, full, handle); err != nil {
+					return err
+				}
 				break outer
 			}
 		} else {
@@ -186,7 +193,7 @@ func (n *node) construct(path, full string, handle XHandle) error {
 func (n *node) split(parent *node, i int, path string, handle XHandle) string {
 	// 'i' must greater than zero and less than the length of 'n.path'.
 	child := *n
-	n.tsr, path, child.path, child.index = false, path[i:], n.path[i:], n.path[i]
+	n.handle, n.tsr, path, child.path, child.index = nil, false, path[i:], n.path[i:], n.path[i]
 
 	if len(path) > 0 {
 		// The priority needn't be increased, it will be

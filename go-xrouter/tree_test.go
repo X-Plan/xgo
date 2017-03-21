@@ -15,6 +15,33 @@ import (
 	"testing"
 )
 
+// Test 'node.add' function, but doesn't include the error case.
+func TestAddCorrect(t *testing.T) {
+	var paths = []string{
+		"/who/are/you/?",
+		"/who/is/:she",
+		"/how/are/*you",
+		"/where/is/:xxx/*she",
+		"/how/old/are/you/",
+		"/root/who/are/you/",
+		"/root/how/are/you",
+		"/root/how/are/you/my/friend",
+		"/root/who/is/he",
+		"/what/you/want/to/:do/",
+		"/can/you/tell/me/what/:be/:possession/*favorite",
+		"/could/you/take/a/pass/at/this/implementation",
+		"/what/you/wa:nt/for/me?",
+		"/what's/your/favorite/?/If you known, please/tell me.",
+	}
+
+	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
+	for _, path := range paths {
+		xassert.IsNil(t, n.add(path, handle))
+	}
+	xassert.Equal(t, int(n.priority), len(paths))
+	printNode(n, 0)
+}
+
 // Test 'node.construct' function, and the 'path' is valid.
 func TestConstructCorrect(t *testing.T) {
 	var paths = []string{
