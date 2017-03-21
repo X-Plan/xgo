@@ -201,7 +201,7 @@ func (n *node) split(parent *node, i int, path string, handle XHandle) string {
 		if n.path[i-1] == '/' {
 			if i > 1 {
 				n.path, n.tsr = n.path[:i-1], true
-				n.children = []*node{&node{path: "/", index: '/', handle: handle, children: []*node{&child}}}
+				n.children = []*node{&node{path: "/", index: '/', handle: handle, priority: n.priority, children: []*node{&child}}}
 			} else if parent != nil {
 				// In fact, the handle of parent must be nil, unless
 				// I make a mistake (In this case, path must be equal

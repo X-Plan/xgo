@@ -67,22 +67,23 @@ func TestSplit(t *testing.T) {
 		rest     string
 		priority int
 	}{
-		{"/who/is/she", "is/she", 1},
-		{"/who/are you?", " you?", 1},
-		{"/how/are/you/?", "how/are/you/?", 1},
-		{"/who/a", "", 2},
-		{"/who", "", 2},
+		{"begin/who/is/she", "is/she", 1},
+		{"begin/who/are you?", " you?", 1},
+		{"begin/how/are/you/?", "how/are/you/?", 1},
+		{"begin/who/a", "", 2},
+		{"begin/who", "", 2},
+		{"begin/", "", 2},
 	}
 
 	// Only print once.
 	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-	xassert.IsNil(t, n.construct("/who/are/you/?/", "full path", handle))
+	xassert.IsNil(t, n.construct("begin/who/are/you/?/", "full path", handle))
 	printNode(n, 0)
 
 	newhandle := func(http.ResponseWriter, *http.Request, XParams) {}
 	for _, path := range paths {
 		n = &node{}
-		xassert.IsNil(t, n.construct("/who/are/you/?/", "full path", handle))
+		xassert.IsNil(t, n.construct("begin/who/are/you/?/", "full path", handle))
 		i := lcp(path.original, n.path)
 		xassert.Match(t, n.split(nil, i, path.original, newhandle), path.rest)
 		xassert.Equal(t, int(n.priority), path.priority)
