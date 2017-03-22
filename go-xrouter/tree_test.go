@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-21
+// Last Change: 2017-03-22
 
 package xrouter
 
@@ -30,7 +30,6 @@ func TestAddCorrect(t *testing.T) {
 		"/what/you/want/to/:do/",
 		"/can/you/tell/me/what/:be/:possession/*favorite",
 		"/could/you/take/a/pass/at/this/implementation",
-		"/what/you/wa:nt/for/me?",
 		"/what's/your/favorite/?/If you known, please/tell me.",
 	}
 

@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-21
+// Last Change: 2017-03-22
 
 package xrouter
 
@@ -56,7 +56,9 @@ outer:
 		switch n.nt {
 		case static:
 			i = lcp(path, n.path)
-			if i > 0 && i < len(n.path) {
+			if i < len(n.path) && (path[i] == ':' || path[i] == '*') {
+				return fmt.Errorf("'%s' in path '%s': wildcard confilicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
+			} else if i > 0 && i < len(n.path) {
 				if path = n.split(parent, i, path, handle); len(path) == 0 {
 					break outer
 				}
