@@ -31,6 +31,8 @@ func TestAddCorrect(t *testing.T) {
 		"/can/you/tell/me/what/:be/:possession/*favorite",
 		"/could/you/take/a/pass/at/this/implementation",
 		"/what's/your/favorite/?/If you known, please/tell me.",
+		"/一花一世界/一叶一菩提/", // We don't use chinese in url path. :)
+		"/一叶:障目",
 	}
 
 	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
