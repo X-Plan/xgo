@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-16
+// Last Change: 2017-03-23
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -27,9 +27,27 @@ type XParam struct {
 	Value string
 }
 
+// The string format of a XParam is 'key=value'.
+func (xp XParam) String() string {
+	return xp.Key + "=" + xp.Value
+}
+
 // XParams is a XParam-Slice, which returned by the XRouter.
 // The slice is ordered so you can safely read values by the index.
 type XParams []XParam
+
+// The string format of a XParams is 'key1=value1,key2=value2,key3=value3'.
+func (xps XParams) String() string {
+	var str = ""
+	for i, xp := range xps {
+		if i > 0 {
+			str += "," + xp.String()
+		} else {
+			str = xp.String()
+		}
+	}
+	return str
+}
 
 // Get function returns the value of the first XParam which key matches the
 // given name. If no matching XParam is found, it returns an empty string.
