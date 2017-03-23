@@ -43,13 +43,15 @@ func Get(n int) string {
 
 // Replace a random substring of the 'old' with the 'str', return a new string,
 // the random substring and 'str' are equal in length. If the length of the 'old'
-// is less than the 'str', directly return old string. You can assume that this
-// function will randomly remove a substring when the 'str' is empty.
+// is less than the 'str' or str is empty, directly return old string.
 func Replace(old string, str string) string {
-	if len(old) > len(str) {
+	if len(str) > 0 && len(str) < len(old) {
 		i := int(src.Int63()) % (len(old) - len(str) + 1)
 		return old[:i] + str + old[i+len(str):]
-	} else if len(old) == len(str) {
+	} else if len(str) == len(old) {
+		// If both 'old' and 'str' are empty, return 'str' is
+		// equal to return 'old' effectively. But I don't known
+		// who will do that, it's too strange.
 		return str
 	} else {
 		return old

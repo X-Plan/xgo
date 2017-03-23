@@ -7,11 +7,28 @@
 package xrandstring
 
 import (
+	"fmt"
+	"github.com/X-Plan/xgo/go-xassert"
+	"strings"
 	"testing"
 )
 
-func TestDummy(t *testing.T) {
-	// Nothing.
+func TestReplace(t *testing.T) {
+	// The character of the 'str' isn't included in 'LetterBytes'.
+	str := "!@#$%^"
+	for n := 1; n <= 1000; n++ {
+		oldstr := Get(n)
+		newstr := Replace(oldstr, str)
+		fmt.Println(newstr)
+		xassert.Equal(t, len(oldstr), len(newstr))
+
+		if n >= len(str) {
+			i := strings.Index(newstr, str)
+			xassert.IsTrue(t, i != -1 && i < n-len(str)+1)
+		} else {
+			xassert.Equal(t, newstr, oldstr)
+		}
+	}
 }
 
 func BenchmarkGet16(b *testing.B) {
