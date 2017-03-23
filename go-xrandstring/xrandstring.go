@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const Version = "1.0.0"
+const Version = "1.1.0"
 const LetterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 const (
 	letterIdxBits = 6
@@ -39,4 +39,19 @@ func Get(n int) string {
 	}
 
 	return string(b)
+}
+
+// Replace a random substring of the 'old' with the 'str', return a new string,
+// the random substring and 'str' are equal in length. If the length of the 'old'
+// is less than the 'str', directly return old string. You can assume that this
+// function will randomly remove a substring when the 'str' is empty.
+func Replace(old string, str string) string {
+	if len(old) > len(str) {
+		i := int(src.Int63()) % (len(old) - len(str) + 1)
+		return old[:i] + str + old[i+len(str):]
+	} else if len(old) == len(str) {
+		return str
+	} else {
+		return old
+	}
 }
