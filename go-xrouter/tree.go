@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-22
+// Last Change: 2017-03-23
 
 package xrouter
 
@@ -244,7 +244,7 @@ func (n *node) split(parent *node, i int, path string, handle XHandle) string {
 // parameter is used to control whether get function returns a handle exists
 // with an extra (without the) trailing slash for given path when it hasn't
 // been registered.
-func (n *node) get(path string, xps XParams, tsr bool) XHandle {
+func (n *node) get(path string, xps *XParams, tsr bool) XHandle {
 	var (
 		i    int
 		tail string
@@ -261,7 +261,7 @@ outer:
 				if i = strings.IndexByte(path, '/'); i == -1 {
 					i = len(path)
 				}
-				xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
+				*xps = append(*xps, XParam{Key: n.path[1:], Value: path[:i]})
 				path = path[i:]
 			}
 
@@ -279,7 +279,7 @@ outer:
 		}
 
 		// 'all' node type
-		xps = append(xps, XParam{Key: n.path[1:], Value: path})
+		*xps = append(*xps, XParam{Key: n.path[1:], Value: path})
 		return n.handle
 	}
 

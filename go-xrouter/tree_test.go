@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-22
+// Last Change: 2017-03-23
 
 package xrouter
 
@@ -14,6 +14,49 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestGet(t *testing.T) {
+	var paths = []string{
+		"/remembering/that/I'll/be/dead/soon/is/the/most/important/tool/",
+		"/I've/encounterd/to/help/me/make/the/big/choices/in/life",
+		"/because/almost/:everything/",
+		"/all/external/exp:ectations",
+		"/all/pride",
+		"/all/fear/of/embarr:assment/of/failure/",
+		"/these/things/just/fall/away/in/the/face/of/death/",
+		"/lea:ving/only/what/is/truly/*important",
+		"/remembering/that/you/are/going/to/die/",
+		"/is/the/best/way/",
+		"/to/avoid/the/trap/of/thinking/you/have/something/to/lose",
+		"/you/are/alr:eady/naked",
+		"/there/is/no/reason/not/to/follow/your/heart",
+	}
+
+	n := &node{}
+	for _, path := range paths {
+		xassert.IsNil(t, n.add(path, func(path string) XHandle {
+			return XHandle(func(_ http.ResponseWriter, _ *http.Request, xps XParams) {
+				fmt.Printf("%s [%s]\n", path, xps)
+			})
+		}(path)))
+	}
+
+	for _, path := range paths {
+		var xps XParams
+		handle := n.get(path, &xps, true)
+		xassert.NotNil(t, handle)
+		handle(nil, nil, xps)
+
+		xps = XParams{}
+		if path[len(path)-1] == '/' {
+			handle = n.get(path[:len(path)-1], &xps, true)
+		} else {
+			handle = n.get(path+"/", &xps, true)
+		}
+		xassert.NotNil(t, handle)
+		handle(nil, nil, xps)
+	}
+}
 
 // Test 'node.add' function, but doesn't include the error case.
 func TestAddCorrect(t *testing.T) {
