@@ -1,11 +1,11 @@
 // xrandstring.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2017-01-07
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-07
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2017-01-07
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-03-23
 
-// go-xrandstring提供一个快速生成随机字符串方法.
+// go-xrandstring package contains some random operations about string.
 package xrandstring
 
 import (
@@ -23,7 +23,7 @@ const (
 
 var src = rand.NewSource(time.Now().UnixNano())
 
-// 生成一个长度为n, 字符集为LetterBytes的字符串.
+// Generate a random string of length n, its character set is 'LetterBytes'.
 func Get(n int) string {
 	b := make([]byte, n)
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
