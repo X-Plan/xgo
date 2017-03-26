@@ -274,8 +274,9 @@ outer:
 				} else if !n.tsr || (tsr && n.tsr) {
 					return n.handle
 				}
+			} else {
+				break outer
 			}
-
 		}
 
 		// 'all' node type

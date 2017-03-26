@@ -3,13 +3,14 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-23
+// Last Change: 2017-03-26
 
 package xrouter
 
 import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"github.com/X-Plan/xgo/go-xrandstring"
 	"net/http"
 	"strings"
 	"testing"
@@ -41,8 +42,9 @@ func TestGet(t *testing.T) {
 		}(path)))
 	}
 
+	var xps XParams
 	for _, path := range paths {
-		var xps XParams
+		xps = XParams{}
 		handle := n.get(path, &xps, true)
 		xassert.NotNil(t, handle)
 		handle(nil, nil, xps)
@@ -55,6 +57,22 @@ func TestGet(t *testing.T) {
 		}
 		xassert.NotNil(t, handle)
 		handle(nil, nil, xps)
+	}
+
+outer:
+	for _, path := range paths {
+		xps = XParams{}
+		// Sometimes it will return a non-nil handle, because the '!@#$%^"
+		// replaces a part of a wildcard, so we need exclude this case.
+		handle := n.get(xrandstring.Replace(path, "!@#$%^"), &xps, true)
+		if handle != nil {
+			for _, xp := range xps {
+				if strings.Contains(xp.Value, "!@#$%^") {
+					continue outer
+				}
+			}
+		}
+		xassert.IsNil(t, handle)
 	}
 }
 
