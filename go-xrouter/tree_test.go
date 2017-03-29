@@ -199,9 +199,6 @@ func printNode(n *node, depth int) {
 	}
 }
 
-// Because the default mutex is based on golang map, so I
-// will compare node with map in performance of the get
-// operation.
 func benchmarkGet(b *testing.B, num, depth, length int) {
 	paths, _ := generatePaths(num, depth, length)
 	n := &node{}
@@ -210,24 +207,29 @@ func benchmarkGet(b *testing.B, num, depth, length int) {
 	}
 
 	b.Run(fmt.Sprintf("[node] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
-		for _, path := range paths {
-			var xps XParams
-			n.get(path, &xps, true)
+		for i := 0; i < b.N; i++ {
+			for _, path := range paths {
+				var xps XParams
+				n.get(path, &xps, true)
+			}
 		}
 	})
 
-	m := make(map[string]XHandle)
+	dm := &defaultMux{}
 	for _, path := range paths {
-		m[path] = generateXHandle(path)
+		dm.add(path, generateXHandle(path))
 	}
 
-	b.Run(fmt.Sprintf("[map] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
-		for _, path := range paths {
-			_ = m[path]
+	b.Run(fmt.Sprintf("[default mux] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, path := range paths {
+				dm.get(path)
+			}
 		}
 	})
 }
 
+func BenchmarkGet2_4_6(b *testing.B)  { benchmarkGet(b, 2, 4, 6) }
 func BenchmarkGet2_10_8(b *testing.B) { benchmarkGet(b, 2, 10, 8) }
 func BenchmarkGet3_8_8(b *testing.B)  { benchmarkGet(b, 3, 8, 8) }
 
@@ -235,6 +237,40 @@ func generateXHandle(path string) XHandle {
 	return XHandle(func(_ http.ResponseWriter, _ *http.Request, xps XParams) {
 		fmt.Printf("%s [%s]\n", path, xps)
 	})
+}
+
+// 'defaultMux' is a simplified version of 'http.ServeMux', the basic
+// idea of matching url is Most-specific (longest) pattern wins.
+type defaultMux struct {
+	m map[string]XHandle
+}
+
+func (dm *defaultMux) add(path string, handle XHandle) {
+	if dm.m == nil {
+		dm.m = make(map[string]XHandle)
+	}
+	dm.m[path] = handle
+}
+
+func (dm *defaultMux) get(path string) XHandle {
+	for k, h := range dm.m {
+		if !dm.pathmatch(k, path) {
+			continue
+		}
+		return h
+	}
+	return nil
+}
+
+func (dm *defaultMux) pathmatch(pattern, path string) bool {
+	if len(pattern) == 0 {
+		return false
+	}
+	n := len(pattern)
+	if pattern[n-1] != '/' {
+		return pattern == path
+	}
+	return len(path) >= n && path[0:n] == pattern
 }
 
 // I need a function to generate many random paths, but there
