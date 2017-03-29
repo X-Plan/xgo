@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-26
+// Last Change: 2017-03-29
 
 package xrouter
 
@@ -197,4 +197,67 @@ func printNode(n *node, depth int) {
 	for _, child := range n.children {
 		printNode(child, depth+len(n.path))
 	}
+}
+
+// Because the default mutex is based on golang map, so I
+// will compare node with map in performance of the get
+// operation.
+func benchmarkGet(b *testing.B, num, depth, length int) {
+	paths, _ := generatePaths(num, depth, length)
+	n := &node{}
+	for _, path := range paths {
+		xassert.IsNil(b, n.add(path, generateXHandle(path)))
+	}
+
+	b.Run(fmt.Sprintf("[node] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
+		for _, path := range paths {
+			var xps XParams
+			n.get(path, &xps, true)
+		}
+	})
+
+	m := make(map[string]XHandle)
+	for _, path := range paths {
+		m[path] = generateXHandle(path)
+	}
+
+	b.Run(fmt.Sprintf("[map] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
+		for _, path := range paths {
+			_ = m[path]
+		}
+	})
+}
+
+func BenchmarkGet2_10_8(b *testing.B) { benchmarkGet(b, 2, 10, 8) }
+func BenchmarkGet3_8_8(b *testing.B)  { benchmarkGet(b, 3, 8, 8) }
+
+func generateXHandle(path string) XHandle {
+	return XHandle(func(_ http.ResponseWriter, _ *http.Request, xps XParams) {
+		fmt.Printf("%s [%s]\n", path, xps)
+	})
+}
+
+// I need a function to generate many random paths, but there
+// are not conflicts among them.
+func generatePaths(n, depth, length int) ([]string, int) {
+	var (
+		total = (pow(n, depth) - 1) / (n - 1)
+		paths = make([]string, total)
+	)
+
+	paths[0] = "/" + xrandstring.Get(length)
+	for i := 1; i < total; i++ {
+		pi := (i - 1) / n
+		paths[i] = paths[pi] + "/" + xrandstring.Get(length)
+	}
+
+	return paths, total
+}
+
+func pow(a, b int) int {
+	c := 1
+	for i := 0; i < b; i++ {
+		c *= a
+	}
+	return c
 }
