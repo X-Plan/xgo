@@ -14,6 +14,8 @@ package xrouter
 
 import (
 	"net/http"
+	"strings"
+	"sync"
 )
 
 // XHandle is a function that can be registered to a route to handle HTTP
@@ -69,9 +71,22 @@ func DefaultMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method Not Allowed", 405)
 }
 
+var methods = []string{"GET", "POST", "HEAD", "PUT", "OPTIONS", "PATCH", "DELETE"}
+
+// This function is used to check whether the http method is supported by XRouter.
+func SupportMethod(method string) bool {
+	for _, m := range methods {
+		if strings.ToUpper(method) == m {
+			return true
+		}
+	}
+	return false
+}
+
 // XRouter is the implementation of the 'http.Handler', which can be
 // dispatch requests to different handler functions via register routes.
 type XRouter struct {
+	trees map[string]*tree
 
 	// If the current route can't be matched, but a handler for the
 	// path with (without) the trailing slash exists, which will be
@@ -100,4 +115,41 @@ type XRouter struct {
 	// used to keep your server from crashing because of unrecovered panics. You
 	// should return the http error code 500 (Internal Server Error) in this handler.
 	PanicHandler func(http.ResponseWriter, *http.Request, interface{})
+}
+
+// New returns a new initialized XRouter. All options is enabled by default.
+func New() *XRouter {
+	xr := &XRouter{
+		trees: make(map[string]*tree),
+		CompatibleWithTrailingSlash: true,
+		HandleMethodNotAllowed:      true,
+		NotFound:                    http.HandlerFunc(http.NotFound),
+		MethodNotAllowed:            http.HandlerFunc(DefaultMethodNotAllowed),
+	}
+
+	for _, method := range methods {
+		xr.trees[method] = &tree{&sync.RWMutex{}, &node{}}
+	}
+	return xr
+}
+
+// 'tree' contains the root node of the tree, and it also
+// has a read-write lock to make it safe in concurrent scenario.
+type tree struct {
+	rwmtx *sync.RWMutex
+	n     *node
+}
+
+func (t *tree) add(path string, handle XHandle) error {
+	t.rwmtx.Lock()
+	err := t.n.add(path, handle)
+	t.rwmtx.Unlock()
+	return err
+}
+
+func (t *tree) get(path string, xps *XParams, tsr bool) XHandle {
+	t.rwmtx.RLock()
+	handle := t.n.get(path, xps, tsr)
+	t.rwmtx.RUnlock()
+	return handle
 }
