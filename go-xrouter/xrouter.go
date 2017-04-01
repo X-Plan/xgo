@@ -13,6 +13,7 @@
 package xrouter
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -131,6 +132,20 @@ func New() *XRouter {
 		xr.trees[method] = &tree{&sync.RWMutex{}, &node{}}
 	}
 	return xr
+}
+
+// Handle registers a new request handle with the given path and method.
+func (xr *XRouter) Handle(method, path string, handle XHandle) error {
+	if path[0] != '/' {
+		return fmt.Errorf("path (%s) must begin with '/'", path)
+	}
+
+	tree := xr.trees[method]
+	if tree == nil {
+		return fmt.Errorf("http method (%s) is unsupported", method)
+	}
+
+	return tree.add(path, handle)
 }
 
 // 'tree' contains the root node of the tree, and it also
