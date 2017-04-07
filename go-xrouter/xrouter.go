@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-01
+// Last Change: 2017-04-08
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -146,6 +146,19 @@ func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	}
 
 	return tree.add(path, handle)
+}
+
+// ServeHTTP is the implementation of the http.Handler interface.
+func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if xr.PainicHandler != nil {
+		defer xr.capturePanic(w, r)
+	}
+}
+
+func (xr *XRouter) capturePanic(w http.ResponseWriter, r *http.Request) {
+	if x := recover(); x != nil {
+		xr.PanicHanlder(w, r, x)
+	}
 }
 
 // 'tree' contains the root node of the tree, and it also
