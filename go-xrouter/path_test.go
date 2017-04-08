@@ -8,7 +8,9 @@
 package xrouter
 
 import (
+	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"path"
 	"runtime"
 	"testing"
 )
@@ -85,4 +87,19 @@ func TestPathCleanMallocs(t *testing.T) {
 	for _, test := range cleanTests {
 		xassert.IsTrue(t, int(testing.AllocsPerRun(100, func() { CleanPath(test.result) })) == 0)
 	}
+}
+
+func BenchmarkCleanPath(b *testing.B) {
+	p := "/hello/world/my/name/../is/foo/../how/./old/./../are/you"
+	b.Run(fmt.Sprintf("CleanPath: %s", CleanPath(p)), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			CleanPath(p)
+		}
+	})
+
+	b.Run(fmt.Sprintf("path.Clean: %s", path.Clean(p)), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			path.Clean(p)
+		}
+	})
 }
