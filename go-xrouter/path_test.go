@@ -77,9 +77,8 @@ func TestPathCleanMallocs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping malloc count in short mode")
 	}
-
-	if runtime.GOMAXPROCS(1) < 1 {
-		t.Log("change GOMAXPROCS to 1 failed")
+	if runtime.GOMAXPROCS(0) > 1 {
+		t.Log("skipping AllocsPerRun checks; GOMAXPROCS>1")
 		return
 	}
 
