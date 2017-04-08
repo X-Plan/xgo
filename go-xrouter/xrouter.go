@@ -96,6 +96,10 @@ type XRouter struct {
 	// /foo will be used.
 	CompatibleWithTrailingSlash bool
 
+	// If enabled, the router will reply to OPTIONS requests, but
+	// the custom OPTIONS handlers has more priority than automatic replies.
+	HandleOptions bool
+
 	// If the current request can't be routed, it will check whether another
 	// method is allowed for the current request when this option is enabled.
 	// If other method has router to handle this request, will invoke the
@@ -123,6 +127,7 @@ func New() *XRouter {
 	xr := &XRouter{
 		trees: make(map[string]*tree),
 		CompatibleWithTrailingSlash: true,
+		HandleOptions:               true,
 		HandleMethodNotAllowed:      true,
 		NotFound:                    http.HandlerFunc(http.NotFound),
 		MethodNotAllowed:            http.HandlerFunc(DefaultMethodNotAllowed),
@@ -150,14 +155,14 @@ func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 
 // ServeHTTP is the implementation of the http.Handler interface.
 func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if xr.PainicHandler != nil {
+	if xr.PanicHandler != nil {
 		defer xr.capturePanic(w, r)
 	}
 }
 
 func (xr *XRouter) capturePanic(w http.ResponseWriter, r *http.Request) {
 	if x := recover(); x != nil {
-		xr.PanicHanlder(w, r, x)
+		xr.PanicHandler(w, r, x)
 	}
 }
 
