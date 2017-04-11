@@ -1,11 +1,11 @@
 // xpacket.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2017-01-25
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-25
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2017-01-25
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-04-12
 
-// 一个简单的二进制协议编/解码包.
+// A simple binary protocol encode/decode package.
 package xpacket
 
 import (
@@ -15,15 +15,12 @@ import (
 )
 
 const (
-	sop = "SOP"
-	eop = "EOP"
+	sop = "SOP" // start of packet
+	eop = "EOP" // end of packet
 )
 
-// 数据编码格式为:
-// SOP: 包起始标志 (Start Of Packet). [3 octet]
-// LEN: 包体的长度. [4 octet, big endian]
-// BODY: 包体. [LEN octet]
-// EOP: 包结束标志 (End Of Packet). [3 octet]
+// Packet Format:
+// [SOP (3 octet)][LEN (4 octet, big endian)][BODY (n octet)][EOP (3 octet)]
 func Encode(w io.Writer, data []byte) error {
 	var (
 		err error
