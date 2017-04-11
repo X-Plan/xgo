@@ -3,13 +3,14 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-23
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-23
+// Last Change: 2017-04-11
 
 package xrouter
 
 import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"github.com/X-Plan/xgo/go-xrandstring"
 	"testing"
 )
 
@@ -25,4 +26,19 @@ func TestXParams(t *testing.T) {
 	xassert.IsTrue(t, fmt.Sprintf("%s", XParams{XParam{"Who", "Are"}}) == "Who=Are")
 	xassert.IsTrue(t, fmt.Sprintf("%s", XParams{XParam{"Who", "Are"}, XParam{"You", "Am"}}) == "Who=Are,You=Am")
 	xassert.IsTrue(t, fmt.Sprintf("%s", XParams{XParam{"Who", "Are"}, XParam{"You", "Am"}, XParam{"I", "Alone"}}) == "Who=Are,You=Am,I=Alone")
+}
+
+func TestSupportMethod(t *testing.T) {
+	ms := []string{"get", "Post", "hEad", "puT", "optIons", "patch", "delete"}
+	for _, m := range ms {
+		xassert.IsTrue(t, SupportMethod(m))
+	}
+
+	for _, m := range methods {
+		xassert.IsTrue(t, SupportMethod(m))
+	}
+
+	for _, m := range methods {
+		xassert.IsFalse(t, SupportMethod(xrandstring.Replace(m, "X")))
+	}
 }
