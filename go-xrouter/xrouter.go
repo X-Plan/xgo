@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-08
+// Last Change: 2017-04-11
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -84,11 +84,8 @@ func SupportMethod(method string) bool {
 	return false
 }
 
-// XRouter is the implementation of the 'http.Handler', which can be
-// dispatch requests to different handler functions via register routes.
-type XRouter struct {
-	trees map[string]*tree
-
+// XConfig is used to create a new XRouter.
+type XConfig struct {
 	// If the current route can't be matched, but a handler for the
 	// path with (without) the trailing slash exists, which will be
 	// used to handle this request. For example if the path of request
@@ -122,47 +119,97 @@ type XRouter struct {
 	PanicHandler func(http.ResponseWriter, *http.Request, interface{})
 }
 
+// XRouter is the implementation of the 'http.Handler', which can be
+// dispatch requests to different handler functions via register routes.
+type XRouter struct {
+	trees map[string]*tree
+
+	// The following fields are same as the fields in XConfig
+	// except the first letter is lowercase. Because XRouter
+	// is designed to run safely in a concurrent environment,
+	// so the fields of XRouter can't export to user.
+	compatibleWithTrailingSlash bool
+	handleOptions               bool
+	handleMethodNotAllowed      bool
+	notFound                    http.Handler
+	methodNotAllowed            http.Handler
+	panicHandler                func(http.ResponseWriter, *http.Request, interface{})
+}
+
 // New returns a new initialized XRouter. All options is enabled by default.
-func New() *XRouter {
+func New(xcfg *XConfig) *XRouter {
 	xr := &XRouter{
 		trees: make(map[string]*tree),
-		CompatibleWithTrailingSlash: true,
-		HandleOptions:               true,
-		HandleMethodNotAllowed:      true,
-		NotFound:                    http.HandlerFunc(http.NotFound),
-		MethodNotAllowed:            http.HandlerFunc(DefaultMethodNotAllowed),
+		compatibleWithTrailingSlash: xcfg.CompatibleWithTrailingSlash,
+		handleOptions:               xcfg.HandleOptions,
+		handleMethodNotAllowed:      xcfg.HandleMethodNotAllowed,
+		notFound:                    xcfg.NotFound,
+		methodNotAllowed:            xcfg.MethodNotAllowed,
+		panicHandler:                xcfg.PanicHandler,
 	}
 
-	for _, method := range methods {
-		xr.trees[method] = &tree{&sync.RWMutex{}, &node{}}
+	if xr.notFound == nil {
+		xr.notFound = http.HandlerFunc(http.NotFound)
 	}
+
+	if xr.methodNotAllowed == nil {
+		xr.methodNotAllowed = http.HandlerFunc(DefaultMethodNotAllowed)
+	}
+
 	return xr
 }
 
 // Handle registers a new request handle with the given path and method.
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
-	if path[0] != '/' {
-		return fmt.Errorf("path (%s) must begin with '/'", path)
+	t := xr.trees[method]
+	if t == nil {
+		if SupportMethod(method) {
+			// Create the root node.
+			t = &tree{&sync.RWMutex{}, &node{}}
+			xr.trees[strings.ToUpper(method)] = t
+		} else {
+			return fmt.Errorf("http method (%s) is unsupported", method)
+		}
 	}
 
-	tree := xr.trees[method]
-	if tree == nil {
-		return fmt.Errorf("http method (%s) is unsupported", method)
-	}
-
-	return tree.add(path, handle)
+	// Fixing the path before it's registered.
+	return t.add(CleanPath(path), handle)
 }
 
 // ServeHTTP is the implementation of the http.Handler interface.
 func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if xr.PanicHandler != nil {
+	if xr.panicHandler != nil {
 		defer xr.capturePanic(w, r)
 	}
+
+	// Fix the current request path.
+	path := CleanPath(r.URL.Path)
+
+	if t := xr.trees[r.Method]; t != nil {
+		var xps XParams
+		if handle := t.get(path, &xps, xr.compatibleWithTrailingSlash); handle != nil {
+			handle(w, r, xps)
+			return
+		} else {
+		}
+	}
+
+	if r.Method == "OPTIONS" {
+		if allow := xr.allowed(path); len(allow) > 0 {
+			w.Header().Set("Allow", allow)
+			return
+		}
+	} else {
+	}
+}
+
+func (xr *XRouter) allowed(path string) string {
+	return ""
 }
 
 func (xr *XRouter) capturePanic(w http.ResponseWriter, r *http.Request) {
 	if x := recover(); x != nil {
-		xr.PanicHandler(w, r, x)
+		xr.panicHandler(w, r, x)
 	}
 }
 
