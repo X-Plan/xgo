@@ -166,7 +166,7 @@ func New(xcfg *XConfig) *XRouter {
 // Handle registers a new request handle with the given path and method.
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	t := xr.trees[method]
-	if t == nil || t.isempty() {
+	if t == nil {
 		return fmt.Errorf("http method (%s) is unsupported", method)
 	}
 
@@ -186,8 +186,11 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		path = CleanPath(r.URL.Path)
 	}
 
+	var xps XParams
+
 	if t := xr.trees[r.Method]; t != nil {
-		var xps XParams
+		// If the results of the t.isempty function equals to true,
+		// the t.get function will also return the nil.
 		if handle := t.get(path, &xps, xr.compatibleWithTrailingSlash); handle != nil {
 			handle(w, r, xps)
 			return
@@ -216,6 +219,39 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
+	if path == "*" && reqMethod == "OPTIONS" {
+		for method, t := range xr.trees {
+			if method == "OPTIONS" || t.isempty() {
+				continue
+			}
+
+			// add request method to list of allowed methods
+			if len(allow) == 0 {
+				allow = method
+			} else {
+				allow += ", " + method
+			}
+		}
+	} else {
+		for method, t := range xr.trees {
+			if method == reqMethod || method == "OPTIONS" || t.isempty() {
+				continue
+			}
+
+			var xps XParams
+			if t.get(path, &xps, xr.compatibleWithTrailingSlash) != nil {
+				if len(allow) == 0 {
+					allow = method
+				} else {
+					allow += ", " + method
+				}
+			}
+		}
+	}
+
+	if len(allow) > 0 {
+		allow += ", OPTIONS"
+	}
 	return
 }
 
