@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-23
+// Last Change: 2017-04-11
 
 package xrouter
 
@@ -11,7 +11,41 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
+
+// 'tree' contains the root node of the tree, and it also
+// has a read-write lock to make it safe in concurrent scenario.
+type tree struct {
+	rwmtx *sync.RWMutex
+	n     *node
+}
+
+func (t *tree) add(path string, handle XHandle) error {
+	t.rwmtx.Lock()
+	err := t.n.add(path, handle)
+	t.rwmtx.Unlock()
+	return err
+}
+
+func (t *tree) get(path string, xps *XParams, tsr bool) XHandle {
+	var handle XHandle
+	t.rwmtx.RLock()
+	if len(t.n.path) > 0 {
+		handle = t.n.get(path, xps, tsr)
+	}
+	t.rwmtx.RUnlock()
+	return handle
+}
+
+// If the path length of the root node is zero, which
+// represent this tree is empty.
+func (t *tree) isempty() bool {
+	t.rwmtx.RLock()
+	result := len(t.n.path) == 0
+	t.rwmtx.RUnlock()
+	return result
+}
 
 type nodeType uint8
 

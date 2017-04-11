@@ -69,7 +69,7 @@ func (xps XParams) Get(name string) string {
 // This function is used to set the 'MethodNotAllowed' field of the 'XRouter'
 // when you don't set it, you should covert it to 'http.HandlerFunc' type.
 func DefaultMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Method Not Allowed", 405)
+	http.Error(w, http.StatusText(405), 405)
 }
 
 var methods = []string{"GET", "POST", "HEAD", "PUT", "OPTIONS", "PATCH", "DELETE"}
@@ -156,20 +156,18 @@ func New(xcfg *XConfig) *XRouter {
 		xr.methodNotAllowed = http.HandlerFunc(DefaultMethodNotAllowed)
 	}
 
+	for _, method := range methods {
+		xr.trees[method] = &tree{&sync.RWMutex{}, &node{}}
+	}
+
 	return xr
 }
 
 // Handle registers a new request handle with the given path and method.
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	t := xr.trees[method]
-	if t == nil {
-		if SupportMethod(method) {
-			// Create the root node.
-			t = &tree{&sync.RWMutex{}, &node{}}
-			xr.trees[strings.ToUpper(method)] = t
-		} else {
-			return fmt.Errorf("http method (%s) is unsupported", method)
-		}
+	if t == nil || t.isempty() {
+		return fmt.Errorf("http method (%s) is unsupported", method)
 	}
 
 	// Fixing the path before it's registered.
@@ -182,54 +180,47 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer xr.capturePanic(w, r)
 	}
 
-	// Fix the current request path.
-	path := CleanPath(r.URL.Path)
+	// Fix the current request path, but exclude the asterisk ('*').
+	path := "*"
+	if r.URL.Path != "*" {
+		path = CleanPath(r.URL.Path)
+	}
 
 	if t := xr.trees[r.Method]; t != nil {
 		var xps XParams
 		if handle := t.get(path, &xps, xr.compatibleWithTrailingSlash); handle != nil {
 			handle(w, r, xps)
 			return
-		} else {
 		}
 	}
 
 	if r.Method == "OPTIONS" {
-		if allow := xr.allowed(path); len(allow) > 0 {
+		// Handle OPTIONS requests.
+		if allow := xr.allowed(path, r.Method); len(allow) > 0 {
 			w.Header().Set("Allow", allow)
 			return
 		}
 	} else {
+		// Handle 405.
+		if xr.handleMethodNotAllowed {
+			if allow := xr.allowed(path, r.Method); len(allow) > 0 {
+				w.Header().Set("Allow", allow)
+				xr.methodNotAllowed.ServeHTTP(w, r)
+				return
+			}
+		}
 	}
+
+	// Other case returns 404.
+	xr.notFound.ServeHTTP(w, r)
 }
 
-func (xr *XRouter) allowed(path string) string {
-	return ""
+func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
+	return
 }
 
 func (xr *XRouter) capturePanic(w http.ResponseWriter, r *http.Request) {
 	if x := recover(); x != nil {
 		xr.panicHandler(w, r, x)
 	}
-}
-
-// 'tree' contains the root node of the tree, and it also
-// has a read-write lock to make it safe in concurrent scenario.
-type tree struct {
-	rwmtx *sync.RWMutex
-	n     *node
-}
-
-func (t *tree) add(path string, handle XHandle) error {
-	t.rwmtx.Lock()
-	err := t.n.add(path, handle)
-	t.rwmtx.Unlock()
-	return err
-}
-
-func (t *tree) get(path string, xps *XParams, tsr bool) XHandle {
-	t.rwmtx.RLock()
-	handle := t.n.get(path, xps, tsr)
-	t.rwmtx.RUnlock()
-	return handle
 }
