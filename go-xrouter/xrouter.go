@@ -138,6 +138,10 @@ type XRouter struct {
 
 // New returns a new initialized XRouter. All options is enabled by default.
 func New(xcfg *XConfig) *XRouter {
+	if xcfg == nil {
+		return nil
+	}
+
 	xr := &XRouter{
 		trees: make(map[string]*tree),
 		compatibleWithTrailingSlash: xcfg.CompatibleWithTrailingSlash,

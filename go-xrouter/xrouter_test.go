@@ -42,3 +42,6 @@ func TestSupportMethod(t *testing.T) {
 		xassert.IsFalse(t, SupportMethod(xrandstring.Replace(m, "X")))
 	}
 }
+
+func TestNew(t *testing.T) {
+}
