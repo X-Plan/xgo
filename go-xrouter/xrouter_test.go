@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-23
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-11
+// Last Change: 2017-04-13
 
 package xrouter
 
@@ -44,4 +44,9 @@ func TestSupportMethod(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	xassert.IsNil(t, New(nil))
+	xr := New(&XConfig{})
+	for _, method := range methods {
+		xassert.NotNil(t, xr.trees[method])
+	}
 }
