@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-23
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-13
+// Last Change: 2017-04-17
 
 package xrouter
 
@@ -48,5 +48,26 @@ func TestNew(t *testing.T) {
 	xr := New(&XConfig{})
 	for _, method := range methods {
 		xassert.NotNil(t, xr.trees[method])
+	}
+}
+
+func TestHandle(t *testing.T) {
+	xr := New(&XConfig{})
+	for _, method := range methods {
+		paths, _ := generatePaths(100, 3, 6)
+		for _, path := range paths {
+			xassert.IsNil(t, xr.Handle(method, path, generateXHandle(path)))
+		}
+	}
+
+	// Test the path duplicate case, which is produced by CleanPath function.
+	xassert.IsNil(t, xr.Handle("POST", "/hello/world/", generateXHandle("/hello/world/")))
+	xassert.NotNil(t, xr.Handle("post", "/hello/xxx/../world/", generateXHandle("/hello/xxx/../world/")))
+	xassert.IsNil(t, xr.Handle("GET", "/hello/xxx/../world/", generateXHandle("/hello/xxx/../world/")))
+
+	// Test the unsupported methods.
+	ums := []string{"POXX", "GEX", "XATCH", "FOO", "bar"}
+	for _, um := range ums {
+		xassert.Match(t, xr.Handle(um, "/foo", nil), fmt.Sprintf(`http method \(%s\) is unsupported`, um))
 	}
 }
