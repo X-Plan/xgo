@@ -167,6 +167,41 @@ func New(xcfg *XConfig) *XRouter {
 	return xr
 }
 
+// GET is a shortcut for Handle("GET", path, handle)
+func (xr *XRouter) GET(path string, handle XHandle) error {
+	return xr.Handle("GET", path, handle)
+}
+
+// POST is a shortcut for Handle("POST", path, handle)
+func (xr *XRouter) POST(path string, handle XHandle) error {
+	return xr.Handle("POST", path, handle)
+}
+
+// HEAD is a shortcut for Handle("HEAD", path, handle)
+func (xr *XRouter) HEAD(path string, handle XHandle) error {
+	return xr.Handle("HEAD", path, handle)
+}
+
+// PUT is a shortcut for Handle("PUT", path, handle)
+func (xr *XRouter) PUT(path string, handle XHandle) error {
+	return xr.Handle("PUT", path, handle)
+}
+
+// OPTIONS is a shortcut for Handle("OPTIONS", path, handle)
+func (xr *XRouter) OPTIONS(path string, handle XHandle) error {
+	return xr.Handle("OPTIONS", path, handle)
+}
+
+// PATCH is a shortcut for Handle("PATCH", path, handle)
+func (xr *XRouter) PATCH(path string, handle XHandle) error {
+	return xr.Handle("PATCH", path, handle)
+}
+
+// DELETE is a shortcut for Handle("DELETE", path, handle)
+func (xr *XRouter) DELETE(path string, handle XHandle) error {
+	return xr.Handle("DELETE", path, handle)
+}
+
 // Handle registers a new request handle with the given path and method.
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	t := xr.trees[strings.ToUpper(method)]

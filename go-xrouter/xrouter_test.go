@@ -71,3 +71,14 @@ func TestHandle(t *testing.T) {
 		xassert.Match(t, xr.Handle(um, "/foo", nil), fmt.Sprintf(`http method \(%s\) is unsupported`, um))
 	}
 }
+
+func TestServeHTTP(t *testing.T) {
+	setupServer()
+	setupClient(t)
+}
+
+func setupServer() {
+}
+
+func setupClient(t *testing.T) {
+}
