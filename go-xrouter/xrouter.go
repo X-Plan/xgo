@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-11
+// Last Change: 2017-04-17
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -138,6 +138,10 @@ type XRouter struct {
 
 // New returns a new initialized XRouter. All options is enabled by default.
 func New(xcfg *XConfig) *XRouter {
+	if xcfg == nil {
+		return nil
+	}
+
 	xr := &XRouter{
 		trees: make(map[string]*tree),
 		compatibleWithTrailingSlash: xcfg.CompatibleWithTrailingSlash,
@@ -165,7 +169,7 @@ func New(xcfg *XConfig) *XRouter {
 
 // Handle registers a new request handle with the given path and method.
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
-	t := xr.trees[method]
+	t := xr.trees[strings.ToUpper(method)]
 	if t == nil {
 		return fmt.Errorf("http method (%s) is unsupported", method)
 	}
