@@ -4,4 +4,4 @@
 ![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**go-xretry**提供了以指数回退的方式重试某一操作的机制.
+**go-xretry** provides the retry mechanism based on [Binary Exponential Backoff](https://en.wikipedia.org/wiki/Exponential_backoff#Binary_exponential_backoff).
