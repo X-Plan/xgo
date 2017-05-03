@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-10
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-12
+// Last Change: 2017-05-03
 
 // go-xsched is a scheduler for load balancing, the implementation of it
 // is based on weight round-robin algorithm, it's concurrent-safe too.
@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const Version = "1.0.0"
+const Version = "1.0.1"
 
 type XScheduler struct {
 	addrs []*addrUnit
@@ -35,8 +35,8 @@ type XScheduler struct {
 // Create a new instance of XScheduler. The strs parameter is the collection
 // of server address, the format of address likes 'host:port:weight'. If the
 // weight field of the item is zero, this item will be ignored, but the weight
-// field is empty will return an error. If the multiple items share the common
-// 'host:port' prefix, only the last nonzero-weight item can be used.
+// field is empty or negative will return an error. If the multiple items share
+// the common 'host:port' prefix, only the last nonzero-weight item can be used.
 func New(strs []string) (*XScheduler, error) {
 	var (
 		xs    = &XScheduler{addrm: make(map[string]*addrUnit)}

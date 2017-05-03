@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-12
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-12
+// Last Change: 2017-05-03
 
 package xsched
 
@@ -236,4 +236,11 @@ func createResultSeed(failRate float64) func() bool {
 			return false
 		}
 	}
+}
+
+func testGCD(t *testing.T) {
+	xassert.Equal(t, gcd(12, 3), 3)
+	xassert.Equal(t, gcd(10, 100), 10)
+	xassert.Equal(t, gcd(101, 9), 1)
+	xassert.Equal(t, gcd(100, 0), 100)
 }
