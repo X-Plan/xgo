@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-29
+// Last Change: 2017-05-25
 
 package xrouter
 
@@ -92,6 +92,8 @@ func TestAddCorrect(t *testing.T) {
 		"/can/you/tell/me/what/:be/:possession/*favorite",
 		"/could/you/take/a/pass/at/this/implementation",
 		"/what's/your/favorite/?/If you known, please/tell me.",
+		"/gists/:id/star",
+		"/gists/:id/",
 		"/一花一世界/一叶一菩提/", // We don't use chinese in url path. :)
 		"/一叶:障目",
 	}

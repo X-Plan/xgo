@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-11
+// Last Change: 2017-05-25
 
 package xrouter
 
@@ -90,7 +90,7 @@ outer:
 		switch n.nt {
 		case static:
 			i = lcp(path, n.path)
-			if i < len(n.path) && (path[i] == ':' || path[i] == '*') {
+			if i < len(n.path) && i < len(path) && (path[i] == ':' || path[i] == '*') {
 				return fmt.Errorf("'%s' in path '%s': wildcard confilicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
 			} else if i > 0 && i < len(n.path) {
 				if path = n.split(parent, i, path, handle); len(path) == 0 {
@@ -103,9 +103,32 @@ outer:
 			}
 		case param:
 			i = lcp(path, n.path)
-			if i == len(n.path) && i < len(path) {
-				path = path[i:]
-			} else if i != len(n.path) || !n.tsr {
+
+			var ok bool
+			if i == len(n.path) {
+				if i < len(path) && path[i] == '/' {
+					path = path[i:]
+					ok = true
+				} else if i == len(path) {
+					if n.handle == nil || n.tsr {
+						path = ""
+						ok = true
+						if !n.tsr && len(n.children) == 1 {
+							// param node has only child one node at most, and the
+							// first character of child.path must be '/'.
+							child = n.children[0]
+							if len(child.path) > 1 {
+								subChild := *child
+								subChild.path, subChild.index = child.path[1:], child.path[1]
+								child.path, child.children = "/", []*node{&subChild}
+							}
+							child.handle, child.tsr = handle, true
+						}
+					}
+				}
+			}
+
+			if !ok {
 				return fmt.Errorf("'%s' in path '%s': conflict with the existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 			}
 
