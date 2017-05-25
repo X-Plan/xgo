@@ -98,8 +98,11 @@ outer:
 				}
 			} else if i < len(path) {
 				path = path[i:]
-			} else if i == len(path) && n.handle != nil && !n.tsr {
-				return fmt.Errorf("path '%s' has already been registered", path)
+			} else if i == len(path) {
+				if n.handle != nil && !n.tsr {
+					return fmt.Errorf("path '%s' has already been registered", path)
+				}
+				path = ""
 			}
 		case param:
 			i = lcp(path, n.path)
@@ -162,6 +165,7 @@ outer:
 			}
 		} else {
 			n.handle, n.tsr = handle, false
+			n.priority++
 			break outer
 		}
 	}

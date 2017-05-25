@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-17
+// Last Change: 2017-05-25
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -136,7 +136,7 @@ type XRouter struct {
 	panicHandler                func(http.ResponseWriter, *http.Request, interface{})
 }
 
-// New returns a new initialized XRouter. All options is enabled by default.
+// New returns a new initialized XRouter.
 func New(xcfg *XConfig) *XRouter {
 	if xcfg == nil {
 		return nil
@@ -237,10 +237,12 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "OPTIONS" {
-		// Handle OPTIONS requests.
-		if allow := xr.allowed(path, r.Method); len(allow) > 0 {
-			w.Header().Set("Allow", allow)
-			return
+		if xr.handleOptions {
+			// Handle OPTIONS requests.
+			if allow := xr.allowed(path, r.Method); len(allow) > 0 {
+				w.Header().Set("Allow", allow)
+				return
+			}
 		}
 	} else {
 		// Handle 405.

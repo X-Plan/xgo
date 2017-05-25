@@ -79,6 +79,7 @@ outer:
 // Test 'node.add' function, but doesn't include the error case.
 func TestAddCorrect(t *testing.T) {
 	var paths = []string{
+		"/",
 		"/who/are/you/?",
 		"/who/is/:she",
 		"/how/are/*you",
