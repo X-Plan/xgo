@@ -104,6 +104,7 @@ func TestAddCorrect(t *testing.T) {
 		xassert.IsNil(t, n.add(path, handle))
 	}
 	xassert.Equal(t, int(n.priority), len(paths))
+	checkPriority(n)
 	printNode(n, 0)
 }
 
@@ -184,6 +185,25 @@ func TestSplit(t *testing.T) {
 			printNode(n, 0)
 		}
 	}
+}
+
+// Check whether the priority field of a node is right.
+func checkPriority(n *node) uint32 {
+	var prior uint32
+	if n.handle != nil && !n.tsr {
+		prior = 1
+	}
+
+	for _, child := range n.children {
+		prior += checkPriority(child)
+	}
+
+	if prior != n.priority {
+		printNode(n, 0)
+		panic("priority field is invalid")
+	}
+
+	return prior
 }
 
 // Print node in tree-text format.

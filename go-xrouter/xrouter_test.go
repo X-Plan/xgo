@@ -410,6 +410,10 @@ func setupServer(t *testing.T, xcfg *XConfig, pairs []requestPair, port string) 
 		})(pair)))
 	}
 
+	for _, tr := range xr.trees {
+		checkPriority(tr.n)
+	}
+
 	s := &http.Server{
 		Addr:           "127.0.0.1:" + port,
 		Handler:        xr,
