@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-25
+// Last Change: 2017-05-26
 
 package xrouter
 
@@ -315,12 +315,16 @@ outer:
 	for {
 		if n.nt != all {
 			if n.nt == static {
-				i = lcp(path, n.path)
+				for i = 0; i < len(n.path) && i < len(path) && path[i] == n.path[i]; {
+					i++
+				}
 				path, tail = path[i:], n.path[i:]
 			} else {
 				// 'param' node type
-				if i = strings.IndexByte(path, '/'); i == -1 {
-					i = len(path)
+				for i = 0; i < len(path); i++ {
+					if path[i] == '/' {
+						break
+					}
 				}
 				*xps = append(*xps, XParam{Key: n.path[1:], Value: path[:i]})
 				path = path[i:]

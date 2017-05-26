@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-25
+// Last Change: 2017-05-26
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -222,7 +222,8 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Fix the current request path, but exclude the asterisk ('*').
 	path := "*"
 	if r.URL.Path != "*" {
-		path = CleanPath(r.URL.Path)
+		// 		path = CleanPath(r.URL.Path)
+		path = r.URL.Path
 	}
 
 	var xps XParams
