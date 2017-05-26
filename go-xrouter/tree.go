@@ -49,57 +49,40 @@ func (n *node) get(path string, enableTSR bool) (h XHandle, xps XParams, tsr boo
 
 outer:
 	for len(path) > 0 {
-		if n.nt != all {
-			if n.nt == static {
-				for i = 0; i < len(n.path) && i < len(path) && path[i] == n.path[i]; {
-					i++
+		switch n.nt {
+		case static:
+			for i = 0; i < len(n.path) && i < len(path) && path[i] == n.path[i]; {
+				i++
+			}
+		case param:
+			for i = 0; i < len(path); i++ {
+				if path[i] == '/' {
+					break
 				}
-			} else {
-				var (
-					slash bool
-					val   string
-				)
-				// 'param' node type.
-				for i = 0; i < len(path); i++ {
-					if path[i] == '/' {
-						i++
-						slash = true
-						break
-					}
-				}
-
-				if slash {
-					val = path[:i-1]
-				} else {
-					val = path[:i]
-				}
-
-				if len(val) == 0 {
+			}
+			if n.path[len(n.path)-1] == '/' {
+				if i == len(path) {
 					break outer
 				}
 
-				if xps == nil {
-					xps = make(XParams, 0, n.maxParams)
-				}
-				xps = append(xps, XParam{Key: n.path[1 : len(n.path)-1], Value: val})
+				xps = append(xps, XParam{Key: n.path[1 : len(n.path)-1], Value: path[:i]})
+				i++
+			} else {
+				xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
 			}
-
-			if n.nt == param || i == len(n.path) {
-				if i < len(path) {
-					if child := n.child(path[i]); child != nil {
-						parent, n, path = n, child, path[i:]
-						continue
-					}
-				} else if n.handle != nil {
-					h = n.handle
-				}
-			}
-
-			break outer
+		case all:
+			xps = append(xps, XParam{Key: n.path[1:], Value: path})
+			i = len(path)
 		}
 
-		// 'all' node type
-		h, xps = n.handle, append(xps, XParam{Key: n.path[1:], Value: path})
+		if i < len(path) {
+			if child := n.child(path[i]); child != nil {
+				parent, n, path = n, child, path[i:]
+				continue
+			}
+		} else if n.handle != nil {
+			h = n.handle
+		}
 		break outer
 	}
 
