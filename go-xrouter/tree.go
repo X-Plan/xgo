@@ -47,6 +47,51 @@ type node struct {
 	handle    XHandle
 }
 
+// Register a new handle with the given path. If the path conflicts with
+// a existing path, a error will be returned. path need to be noempty,
+// otherwise anything won't happen, include error. I implement this function
+// by recursively calling, because this will make implement recovery strategy
+// more easy and code more readable. Of course, it will sacrifice performance,
+// but the frequency of calling this function is lower comparing with 'get',
+// so it doesn't matter.
+func (n *node) add(path string, full string, handle XHandle) (err error) {
+	if len(n.path) == 0 {
+		// New node.
+		return n.construct(path, full, handle)
+	}
+
+	switch n.nt {
+	case static:
+		i := lcp(path, n.path)
+		if i < len(path) {
+			if i < len(n.path) {
+				err = n.split(i, nil)
+			}
+			if child := n.child(path[i]); child != nil {
+				err = child.add(path[i:], full, handle)
+			} else {
+				n.children = append(n.children, &node{})
+				err = n.children[len(n.children)-1].construct(path[i:], full, handle)
+			}
+		} else if i < len(n.path) && i == len(path) {
+			err = n.split(i, handle)
+		} else { // i == len(n.path) == len(path)
+			err = fmt.Errorf("path '%s' has already been registered", full)
+		}
+	case param:
+		i := lcp(path, n.path)
+	case all:
+	}
+
+	return
+}
+
+func (n *node) construct(path string, full string, handle XHandle) error {
+}
+
+func (n *node) split(i int, handle XHandle) error {
+}
+
 // Returns the handle registered with the given path. The values of wildcards
 // are saved to a xps parameter which are ordered. enableTSR control whether
 // executes a TSR (trailing slash redirect) recommendation statement.
@@ -149,4 +194,42 @@ func (n *node) child(index byte) *node {
 		}
 	}
 	return nil
+}
+
+// Resort the children by the priority.
+func (n *node) resort() {
+	if n != nil && !sort.IsSorted(n.children) {
+		sort.Sort(n.children)
+	}
+}
+
+type nodes []*node
+
+// Impelment sort.Interface.
+func (ns nodes) Len() int {
+	return len(ns)
+}
+
+func (ns nodes) Less(i, j int) bool {
+	return ns[i].priority > ns[j].priority
+}
+
+func (ns nodes) Swap(i, j int) {
+	ns[i], ns[j] = ns[j], ns[i]
+}
+
+func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}
+
+// Find the longest common prefix.
+func lcp(a, b string) int {
+	var i, max = 0, min(len(a), len(b))
+	for i < max && a[i] == b[i] {
+		i++
+	}
+	return i
 }
