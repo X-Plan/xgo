@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-26
+// Last Change: 2017-05-27
 
 package xrouter
 
@@ -28,6 +28,15 @@ const (
 	all                    // '*name' wildcard node type
 )
 
+// This auxiliary type is used for trailing slash redirect.
+type tsrType uint8
+
+const (
+	notRedirect tsrType = iota // Can't be redirected.
+	removeSlash                // Can be redirected by removing trailing slash.
+	addSlash                   // Can be redirected by adding trailing slash.
+)
+
 type node struct {
 	path      string
 	maxParams uint8
@@ -41,7 +50,7 @@ type node struct {
 // Returns the handle registered with the given path. The values of wildcards
 // are saved to a xps parameter which are ordered. enableTSR control whether
 // executes a TSR (trailing slash redirect) recommendation statement.
-func (n *node) get(path string, enableTSR bool) (h XHandle, xps XParams, tsr bool) {
+func (n *node) get(path string, enableTSR bool) (h XHandle, xps XParams, tsr tsrType) {
 	var (
 		i      int
 		parent *node
@@ -60,14 +69,20 @@ outer:
 					break
 				}
 			}
-			if n.path[len(n.path)-1] == '/' {
+
+			// Because the value of XParam can't be empty, so the 'i' must
+			// be greater than zero.
+			if i > 0 && n.path[len(n.path)-1] == '/' {
 				if i == len(path) {
 					break outer
 				}
 
+				if xps == nil {
+					xps = make(XParams, 0, n.maxParams)
+				}
 				xps = append(xps, XParam{Key: n.path[1 : len(n.path)-1], Value: path[:i]})
 				i++
-			} else {
+			} else if i > 0 {
 				xps = append(xps, XParam{Key: n.path[1:], Value: path[:i]})
 			}
 		case all:
@@ -93,7 +108,34 @@ outer:
 	return
 }
 
-func (n *node) canTSR(parent *node, path string) bool {
+func (n *node) canTSR(parent *node, path string, i int) tsrType {
+	if len(path) == 0 || path[len(path)-1] != '/' {
+		switch n.nt {
+		case static:
+			if n.handle != nil && i == len(path) && i == len(n.path)-1 && n.path[i] == '/' {
+				return addSlash
+			}
+		case param:
+			if n.handle != nil && n.path[len(n.path)-1] == '/' {
+				return addSlash
+			}
+		}
+	} else { // len(path) > 0 && path[len(path)-1] == '/'
+		switch n.nt {
+		case static:
+			if i == len(path)-1 && i == len(n.path) {
+				if len(n.path) > 1 && n.handle != nil ||
+					len(n.path) == 1 && parent.handle != nil {
+					return removeSlash
+				}
+			}
+		case param:
+			if i == len(path)-1 && n.n.handle != nil {
+				return removeSlash
+			}
+		}
+	}
+	return notRedirect
 }
 
 // Locate the approriate child node by index parameter.
