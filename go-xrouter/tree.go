@@ -67,12 +67,7 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 			if i < len(n.path) {
 				err = n.split(i, nil)
 			}
-			if child := n.child(path[i]); child != nil {
-				err = child.add(path[i:], full, handle)
-			} else {
-				n.children = append(n.children, &node{})
-				err = n.children[len(n.children)-1].construct(path[i:], full, handle)
-			}
+			err = n.next(i, path, full, handle)
 		} else if i < len(n.path) && i == len(path) {
 			err = n.split(i, handle)
 		} else { // i == len(n.path) == len(path)
@@ -80,9 +75,28 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 		}
 	case param:
 		i := lcp(path, n.path)
+		if i > len(n.path) {
+			err = n.next(i, path, full, handle)
+		} else if i == len(n.path) && n.path[len(n.path)-1] == '/' {
+			err = n.split(i, handle)
+		} else {
+			err = fmt.Errorf("'%s' in path '%s': conflict with existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
+		}
 	case all:
+		err = fmt.Errorf("'%s' in path '%s': conflict with the existing catch-all wildcard '%s' in prefix '%s' ", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 	}
 
+	return
+}
+
+// Move to next child node (If not exist, create it).
+func (n *node) next(i int, path, full string, handle XHandle) (err error) {
+	if child := n.child(path[i]); child != nil {
+		err = child.add(path[i:], full, handle)
+	} else {
+		n.children = append(n.chidlren, &node{})
+		err = n.children[len(n.children)-1].construct(path[i:], full, handle)
+	}
 	return
 }
 
