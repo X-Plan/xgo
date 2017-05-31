@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-27
+// Last Change: 2017-05-31
 
 package xrouter
 
@@ -55,6 +55,10 @@ type node struct {
 // but the frequency of calling this function is lower comparing with 'get',
 // so it doesn't matter.
 func (n *node) add(path string, full string, handle XHandle) (err error) {
+	if len(path) == 0 {
+		return fmt.Errorf("path argument is empty")
+	}
+
 	if len(n.path) == 0 {
 		// New node.
 		return n.construct(path, full, handle)
@@ -64,8 +68,15 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 	case static:
 		i := lcp(path, n.path)
 		if i < len(path) {
+			if i == 0 && (path[i] == ':' || path[i] == '*') {
+				err = fmt.Errorf("'%s' in path '%s': wildcard confilicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
+				break
+			}
+
 			if i < len(n.path) {
-				err = n.split(i, nil)
+				if err = n.split(i, nil); err != nil {
+					break
+				}
 			}
 			err = n.next(i, path, full, handle)
 		} else if i < len(n.path) && i == len(path) {
@@ -91,16 +102,73 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 
 // Move to next child node (If not exist, create it).
 func (n *node) next(i int, path, full string, handle XHandle) (err error) {
-	if child := n.child(path[i]); child != nil {
-		err = child.add(path[i:], full, handle)
-	} else {
-		n.children = append(n.chidlren, &node{})
-		err = n.children[len(n.children)-1].construct(path[i:], full, handle)
+	if i < len(path) {
+		if child := n.child(path[i]); child != nil {
+			err = child.add(path[i:], full, handle)
+		} else {
+			n.children = append(n.chidlren, &node{})
+			err = n.children[len(n.children)-1].construct(path[i:], full, handle)
+		}
 	}
 	return
 }
 
-func (n *node) construct(path string, full string, handle XHandle) error {
+// Init a empty node.
+func (n *node) construct(path string, full string, handle XHandle) (err error) {
+	var i int
+	n.priority = 1
+	switch path[0] {
+	case ':':
+		n.nt = param
+		if i = strings.IndexAny(path[1:], ":*/"); i > 0 {
+			// NOTE: 'i' is based on 'path[1:]', not 'path', so
+			// we have got to add 1 to it.
+			i++
+			if path[i] != '/' {
+				err = fmt.Errorf("'%s' in path '%s': only one wildcard per path segment is allowed", path, full)
+				break
+			}
+
+			i++
+			n.path, n.maxParams = path[:i], 1
+			if i < len(path) {
+				child := &node{}
+				if err = child.construct(path[i:], full, handle); err == nil {
+					n.children = []*node{child}
+					n.maxParams += child.maxParams
+				}
+			} else {
+				n.handle = handle
+			}
+		} else if i == -1 && len(path) > 1 {
+			n.path, n.maxParams, n.handle = path, 1, handle
+		} else {
+			err = fmt.Errorf("'%s' in path '%s': param wildcard can't be empty", path, full)
+		}
+	case '*':
+		n.nt = all
+		if i = strings.IndexAny(path[1:], ":*/"); i != -1 {
+			err = fmt.Errorf("'%s' in path '%s': catch-all routes are only allowed at the end of the path", path[:i+1], full)
+		} else if len(path) == 1 {
+			err = fmt.Errorf("'%s' in path '%s': catch-all wildcard can't be empty", path, full)
+		} else {
+			n.path, n.maxParams, n.handle = path, 1, handle
+		}
+	default:
+		if i = strings.IndexAny(path, ":*"); i != -1 {
+			// We only need to set the 'index' field of a static node,
+			// there is no use for param node and all node.
+			n.path, n.index = path[:i], path[0]
+			child := &node{}
+			if err = child.construct(path[i:], full, handle); err == nil {
+				n.children, n.maxParams = []*node{child}, child.maxParams
+			}
+		} else {
+			n.path, n.index, n.handle = path, path[0], handle
+		}
+	}
+
+	return
 }
 
 func (n *node) split(i int, handle XHandle) error {
