@@ -60,8 +60,11 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 	}
 
 	if len(n.path) == 0 {
-		// New node.
-		return n.construct(path, full, handle)
+		// New node, may be it's just only used for root node.
+		if err = n.construct(path, full, handle); err != nil {
+			*n = node{}
+		}
+		return
 	}
 
 	switch n.nt {
@@ -117,10 +120,18 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 	if i < len(path) {
 		if child := n.child(path[i]); child != nil {
-			err = child.add(path[i:], full, handle)
+			if err = child.add(path[i:], full, handle); err == nil {
+				n.resort()
+				n.maxParams = max(n.maxParams, child.maxParams)
+			}
 		} else {
-			n.children = append(n.chidlren, &node{})
-			err = n.children[len(n.children)-1].construct(path[i:], full, handle)
+			child := &node{}
+			if err = child.construct(path[i:], full, handle); err == nil {
+				// We don't need to resort children, because the priority
+				// of new node is equal to 1 (minimum).
+				n.children = append(n.children, child)
+				n.maxParams = max(n.maxParams, child.maxParams)
+			}
 		}
 	}
 	return
@@ -344,6 +355,13 @@ func (ns nodes) Swap(i, j int) {
 
 func min(a, b int) int {
 	if a <= b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a >= b {
 		return a
 	}
 	return b
