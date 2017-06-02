@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-04-17
+// Last Change: 2017-05-26
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -136,7 +136,7 @@ type XRouter struct {
 	panicHandler                func(http.ResponseWriter, *http.Request, interface{})
 }
 
-// New returns a new initialized XRouter. All options is enabled by default.
+// New returns a new initialized XRouter.
 func New(xcfg *XConfig) *XRouter {
 	if xcfg == nil {
 		return nil
@@ -167,6 +167,41 @@ func New(xcfg *XConfig) *XRouter {
 	return xr
 }
 
+// GET is a shortcut for Handle("GET", path, handle)
+func (xr *XRouter) GET(path string, handle XHandle) error {
+	return xr.Handle("GET", path, handle)
+}
+
+// POST is a shortcut for Handle("POST", path, handle)
+func (xr *XRouter) POST(path string, handle XHandle) error {
+	return xr.Handle("POST", path, handle)
+}
+
+// HEAD is a shortcut for Handle("HEAD", path, handle)
+func (xr *XRouter) HEAD(path string, handle XHandle) error {
+	return xr.Handle("HEAD", path, handle)
+}
+
+// PUT is a shortcut for Handle("PUT", path, handle)
+func (xr *XRouter) PUT(path string, handle XHandle) error {
+	return xr.Handle("PUT", path, handle)
+}
+
+// OPTIONS is a shortcut for Handle("OPTIONS", path, handle)
+func (xr *XRouter) OPTIONS(path string, handle XHandle) error {
+	return xr.Handle("OPTIONS", path, handle)
+}
+
+// PATCH is a shortcut for Handle("PATCH", path, handle)
+func (xr *XRouter) PATCH(path string, handle XHandle) error {
+	return xr.Handle("PATCH", path, handle)
+}
+
+// DELETE is a shortcut for Handle("DELETE", path, handle)
+func (xr *XRouter) DELETE(path string, handle XHandle) error {
+	return xr.Handle("DELETE", path, handle)
+}
+
 // Handle registers a new request handle with the given path and method.
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	t := xr.trees[strings.ToUpper(method)]
@@ -187,7 +222,8 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Fix the current request path, but exclude the asterisk ('*').
 	path := "*"
 	if r.URL.Path != "*" {
-		path = CleanPath(r.URL.Path)
+		// 		path = CleanPath(r.URL.Path)
+		path = r.URL.Path
 	}
 
 	var xps XParams
@@ -202,10 +238,12 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "OPTIONS" {
-		// Handle OPTIONS requests.
-		if allow := xr.allowed(path, r.Method); len(allow) > 0 {
-			w.Header().Set("Allow", allow)
-			return
+		if xr.handleOptions {
+			// Handle OPTIONS requests.
+			if allow := xr.allowed(path, r.Method); len(allow) > 0 {
+				w.Header().Set("Allow", allow)
+				return
+			}
 		}
 	} else {
 		// Handle 405.

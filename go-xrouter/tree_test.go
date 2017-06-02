@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-16
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-29
+// Last Change: 2017-05-25
 
 package xrouter
 
@@ -79,6 +79,7 @@ outer:
 // Test 'node.add' function, but doesn't include the error case.
 func TestAddCorrect(t *testing.T) {
 	var paths = []string{
+		"/",
 		"/who/are/you/?",
 		"/who/is/:she",
 		"/how/are/*you",
@@ -92,6 +93,8 @@ func TestAddCorrect(t *testing.T) {
 		"/can/you/tell/me/what/:be/:possession/*favorite",
 		"/could/you/take/a/pass/at/this/implementation",
 		"/what's/your/favorite/?/If you known, please/tell me.",
+		"/gists/:id/star",
+		"/gists/:id/",
 		"/一花一世界/一叶一菩提/", // We don't use chinese in url path. :)
 		"/一叶:障目",
 	}
@@ -101,6 +104,7 @@ func TestAddCorrect(t *testing.T) {
 		xassert.IsNil(t, n.add(path, handle))
 	}
 	xassert.Equal(t, int(n.priority), len(paths))
+	checkPriority(n)
 	printNode(n, 0)
 }
 
@@ -181,6 +185,25 @@ func TestSplit(t *testing.T) {
 			printNode(n, 0)
 		}
 	}
+}
+
+// Check whether the priority field of a node is right.
+func checkPriority(n *node) uint32 {
+	var prior uint32
+	if n.handle != nil && !n.tsr {
+		prior = 1
+	}
+
+	for _, child := range n.children {
+		prior += checkPriority(child)
+	}
+
+	if prior != n.priority {
+		printNode(n, 0)
+		panic("priority field is invalid")
+	}
+
+	return prior
 }
 
 // Print node in tree-text format.
