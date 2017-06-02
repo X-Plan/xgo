@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-31
+// Last Change: 2017-06-02
 
 package xrouter
 
@@ -81,18 +81,28 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 			err = n.next(i, path, full, handle)
 		} else if i < len(n.path) && i == len(path) {
 			err = n.split(i, handle)
-		} else { // i == len(n.path) == len(path)
+		} else if n.handle == nil {
+			// i == len(n.path) == len(path)
+			n.handle, n.priority = handle, n.priority+1
+		} else {
 			err = fmt.Errorf("path '%s' has already been registered", full)
 		}
 	case param:
 		i := lcp(path, n.path)
-		if i > len(n.path) {
-			err = n.next(i, path, full, handle)
-		} else if i == len(n.path) && n.path[len(n.path)-1] == '/' {
+		if i == len(n.path) && i < len(path) {
+			err = next(i, path, full, handle)
+		} else if i == len(n.path) && i == len(path) {
+			if n.handle == nil {
+				n.handle, n.priority = handle, n.priority+1
+			} else {
+				err = fmt.Errorf("path '%s' has already been registered", full)
+			}
+		} else if i == len(n.path)-1 && n.path[len(n.path)-1] == '/' {
 			err = n.split(i, handle)
 		} else {
 			err = fmt.Errorf("'%s' in path '%s': conflict with existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 		}
+
 	case all:
 		err = fmt.Errorf("'%s' in path '%s': conflict with the existing catch-all wildcard '%s' in prefix '%s' ", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 	}
@@ -172,6 +182,22 @@ func (n *node) construct(path string, full string, handle XHandle) (err error) {
 }
 
 func (n *node) split(i int, handle XHandle) error {
+	if i > 0 {
+		child := *node
+		child.path, child.index = path[i:], path[i]
+		n.path, n.children = path[:i], []*node{child}
+
+		if n.nt == param {
+			child.nt, child.maxParams = static, child.maxParams-1
+		}
+
+		if handle != nil {
+			n.handle, n.priority = n.handle, n.priority+1
+		} else {
+			n.handle = nil
+		}
+	}
+	return nil
 }
 
 // Returns the handle registered with the given path. The values of wildcards
