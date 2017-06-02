@@ -74,12 +74,14 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 			}
 
 			if i < len(n.path) {
+				defer n.combine(&err)
 				if err = n.split(i, nil); err != nil {
 					break
 				}
 			}
 			err = n.next(i, path, full, handle)
 		} else if i < len(n.path) && i == len(path) {
+			defer n.combine(&err)
 			err = n.split(i, handle)
 		} else if n.handle == nil {
 			// i == len(n.path) == len(path)
@@ -98,6 +100,7 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 				err = fmt.Errorf("path '%s' has already been registered", full)
 			}
 		} else if i == len(n.path)-1 && n.path[len(n.path)-1] == '/' {
+			defer n.combine(&err)
 			err = n.split(i, handle)
 		} else {
 			err = fmt.Errorf("'%s' in path '%s': conflict with existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
@@ -192,12 +195,25 @@ func (n *node) split(i int, handle XHandle) error {
 		}
 
 		if handle != nil {
-			n.handle, n.priority = n.handle, n.priority+1
+			n.handle, n.priority = handle, n.priority+1
 		} else {
 			n.handle = nil
 		}
 	}
 	return nil
+}
+
+// The inverse operator of split function, used in recovery.
+func (n *node) combine(err *error) {
+	if *err != nil {
+		child := n.children[0]
+		n.path += child.path
+		n.children = child.children
+		if n.handle != nil {
+			n.priority--
+		}
+		n.handle = child.handle
+	}
 }
 
 // Returns the handle registered with the given path. The values of wildcards
