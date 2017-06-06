@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-02
+// Last Change: 2017-06-06
 
 package xrouter
 
@@ -116,6 +116,47 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 	return
 }
 
+// Remove a register handle. I implement this function by recursively calling.
+// The path parameter must match a existing path exactly, It won't consider
+// wildcard and trailing slash. If the path '/foo/:bar/who/are/*you' has been
+// registerd, we can't use the argument '/foo/:xxx/who/are/*ooo' to remove it.
+func (n *node) remove(path string) (ok bool) {
+	var i = lcp(n.path, path)
+	if i == len(n.path) && i == len(path) {
+		if n.handle != nil {
+			*node = node{}
+			ok = true
+		}
+	} else if i == len(n.path) && i < len(path) {
+		var k int
+		for k = 0; k < len(n.children); k++ {
+			if n.children[k].path[0] == path[i] {
+				break
+			}
+		}
+
+		if k < len(n.children) {
+			if ok = n.children[k].remove(path[i:]); ok {
+				n.children = append(n.children[:i], n.children[i+1:])
+				n.priority--
+				n.setMaxParams()
+
+				if len(n.children) == 1 &&
+					n.nt == static &&
+					n.handle == nil &&
+					n.children[0].nt == static {
+
+					child := n.children[0]
+					n.path += child.path
+					n.children, n.handle = child.children, child.handle
+				}
+			}
+		}
+	}
+
+	return
+}
+
 // Move to next child node (If not exist, create it).
 func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 	if i < len(path) {
@@ -212,6 +253,19 @@ func (n *node) split(i int, handle XHandle) error {
 		}
 	}
 	return nil
+}
+
+func (n *node) setMaxParams() {
+	n.maxParams = 0
+	for _, child := range n.children {
+		if child.maxParams > n.maxParams {
+			n.maxParams = child.maxParams
+		}
+	}
+
+	if n.nt == param || n.nt == all {
+		n.maxParams++
+	}
 }
 
 // The inverse operator of split function, used in recovery.
