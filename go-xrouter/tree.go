@@ -14,6 +14,50 @@ import (
 	"sync"
 )
 
+// 'tree' contains the root node of the tree, and it also
+// has a read-write lock to make it safe in concurrent scenario.
+type tree struct {
+	rwmtx *sync.RWMutex
+	n     *node
+}
+
+func (t *tree) add(path string, handle XHandle) error {
+	t.rwmtx.Lock()
+	err := t.n.add(path, path, handle)
+	t.rwmtx.Unlock()
+	return err
+}
+
+func (t *tree) remove(path string) error {
+	t.rwmtx.Lock()
+	ok := t.n.remove(path)
+	t.rwmtx.Unlock()
+
+	if ok {
+		return nil
+	} else {
+		return fmt.Errorf("path (%s) hasn't been registered", path)
+	}
+}
+
+func (t *tree) get(path string, enableTSR bool) (h XHandle, xps XParams, tsr tsrType) {
+	t.rwmtx.RLock()
+	if len(t.n.path) > 0 {
+		h, xps, tsr = t.n.get(pat, enableTSR)
+	}
+	t.rwmtx.RUnlock()
+	return
+}
+
+// If the path length of the root node is zero, which
+// represent this tree is empty.
+func (t *tree) isempty() bool {
+	t.rwmtx.RLock()
+	result := len(t.n.path) == 0
+	t.rwmtx.RUnlock()
+	return result
+}
+
 type nodeType uint8
 
 var nodeTypeStr = [3]string{"static", "param", "catch-all"}
