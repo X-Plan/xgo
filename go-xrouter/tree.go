@@ -43,7 +43,7 @@ func (t *tree) remove(path string) error {
 func (t *tree) get(path string, enableTSR bool) (h XHandle, xps XParams, tsr tsrType) {
 	t.rwmtx.RLock()
 	if len(t.n.path) > 0 {
-		h, xps, tsr = t.n.get(pat, enableTSR)
+		h, xps, tsr = t.n.get(path, enableTSR)
 	}
 	t.rwmtx.RUnlock()
 	return
@@ -139,7 +139,7 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 	case param:
 		i := lcp(path, n.path)
 		if i == len(n.path) && i < len(path) {
-			err = next(i, path, full, handle)
+			err = n.next(i, path, full, handle)
 		} else if i == len(n.path) && i == len(path) {
 			if n.handle == nil {
 				n.handle, n.priority = handle, n.priority+1
@@ -184,7 +184,7 @@ func (n *node) remove(path string) (ok bool) {
 
 		if k < len(n.children) && n.children[k].priority == 0 {
 			if ok = n.children[k].remove(path[i:]); ok {
-				n.children = append(n.children[:i], n.children[i+1:])
+				n.children = append(n.children[:i], n.children[i+1:]...)
 				n.priority--
 				n.setMaxParams()
 
@@ -291,9 +291,9 @@ func (n *node) construct(path string, full string, handle XHandle) (err error) {
 
 func (n *node) split(i int, handle XHandle) error {
 	if i > 0 {
-		child := *node
-		child.path, child.index = path[i:], path[i]
-		n.path, n.children = path[:i], []*node{child}
+		child := *n
+		child.path, child.index = n.path[i:], n.path[i]
+		n.path, n.children = n.path[:i], []*node{&child}
 
 		if n.nt == param {
 			child.nt, child.maxParams = static, child.maxParams-1
@@ -417,7 +417,7 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 				}
 			}
 		case param:
-			if i == len(path)-1 && n.n.handle != nil {
+			if i == len(path)-1 && n.handle != nil {
 				return removeSlash
 			}
 		}
@@ -467,7 +467,7 @@ func min(a, b int) int {
 	return b
 }
 
-func max(a, b int) int {
+func max(a, b uint8) uint8 {
 	if a >= b {
 		return a
 	}

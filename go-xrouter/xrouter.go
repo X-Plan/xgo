@@ -221,8 +221,8 @@ func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	}
 
 	// Fixing the path before it's registered.
-	path := CleanPath(path)
-	return t.add(path, path, handle)
+	path = CleanPath(path)
+	return t.add(path, handle)
 }
 
 // Remove unregister a existing request handle with given path and method.
@@ -249,9 +249,9 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if handle, xps, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil {
 			handle(w, r, xps)
 			return
-		} else if req.Method != "CONNECT" && path != "/" {
+		} else if r.Method != "CONNECT" && path != "/" {
 			code := 301 // Permanent redirect, request with GET method
-			if req.Method != "GET" {
+			if r.Method != "GET" {
 				// Temporary redirect, request with same method
 				// As of Go 1.3, Go does not support status code 308.
 				code = 307
@@ -312,8 +312,7 @@ func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
 				continue
 			}
 
-			var xps XParams
-			if t.get(path, &xps, xr.compatibleWithTrailingSlash) != nil {
+			if handle, _, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil || tsr > 0 {
 				if len(allow) == 0 {
 					allow = method
 				} else {
