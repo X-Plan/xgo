@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-01-07
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-23
+// Last Change: 2017-06-08
 package xrandstring
 
 import (
@@ -12,6 +12,32 @@ import (
 	"strings"
 	"testing"
 )
+
+// Compute the collision rate of 'Get' function.
+func TestCollisionRate(t *testing.T) {
+	for length := 1; length <= 8; length++ {
+		for n := 1000; n <= 10000; n += 1000 {
+			fmt.Printf("n=%d length=%d collision rate=%.3v\n", n, length, collisionRate(n, length))
+		}
+	}
+}
+
+func collisionRate(n, length int) float64 {
+	var (
+		set            = make(map[string]struct{})
+		collisionCount int
+	)
+	for i := 0; i < n; i++ {
+		str := Get(length)
+		if _, ok := set[str]; !ok {
+			set[str] = struct{}{}
+		} else {
+			collisionCount++
+		}
+	}
+
+	return float64(collisionCount) / float64(n)
+}
 
 func TestReplace(t *testing.T) {
 	// The character of the 'str' isn't included in 'LetterBytes'.
