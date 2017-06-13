@@ -116,7 +116,7 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 		i := lcp(path, n.path)
 		if i < len(path) {
 			if i == 0 && (path[i] == ':' || path[i] == '*') {
-				err = fmt.Errorf("'%s' in path '%s': wildcard confilicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
+				err = fmt.Errorf("'%s' in path '%s': wildcard conflicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
 				break
 			}
 
@@ -213,10 +213,22 @@ func (n *node) concat() {
 // Move to next child node (If not exist, create it).
 func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 	if i < len(path) {
+		if len(n.children) > 0 && (path[i] == ':' || path[i] == '*') {
+			// If the children of a node have one static node, all children
+			// must be static. If a node exists one static node, will produce
+			// a conflict.
+			if n.children[0].nt == static {
+				// The result must be non-nil.
+				err = n.children[0].add(path[i:], full, handle)
+				return
+			}
+		}
+
 		if child := n.child(path[i]); child != nil {
 			if err = child.add(path[i:], full, handle); err == nil {
 				n.resort()
 				n.maxParams = max(n.maxParams, child.maxParams)
+				n.priority++
 			}
 		} else {
 			child := &node{}
@@ -225,6 +237,7 @@ func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 				// of new node is equal to 1 (minimum).
 				n.children = append(n.children, child)
 				n.maxParams = max(n.maxParams, child.maxParams)
+				n.priority++
 			}
 		}
 	}
@@ -483,13 +496,13 @@ func lcp(a, b string) int {
 	return i
 }
 
-// The following methods are used to debug.
+// The following functions/methods are used to debug.
 
 // Print a node recursively.
 func (n *node) print(indent int) {
 	// Format:
 	// priority:[index] path (nt:maxParams:handle)
-	fmt.Printf("%d:[%c] %s (%s:%d:%v)", strings.Repeat(" ", indent), n.priority, n.index, n.path, n.nt, n.maxParams, n.handle)
+	fmt.Printf("%s%d:[%c] %s (%s:%d:%v)\n", strings.Repeat(" ", indent), n.priority, n.index, n.path, n.nt, n.maxParams, n.handle)
 
 	for _, child := range n.children {
 		child.print(indent + 1)
@@ -513,6 +526,10 @@ func (n *node) checkPriority() error {
 		}
 	}
 
+	if n.handle != nil {
+		sum++
+	}
+
 	if sum != n.priority {
 		return fmt.Errorf("The total priority (%d) of children is not equal to the priority (%d) of node (%s:%s)", sum, n.priority, n.nt, n.path)
 	}
@@ -524,7 +541,7 @@ func (n *node) checkPriority() error {
 func (n *node) checkMaxParams() error {
 	var max uint8
 	for _, child := range n.children {
-		if err := n.checkMaxParams(); err != nil {
+		if err := child.checkMaxParams(); err != nil {
 			return err
 		}
 
