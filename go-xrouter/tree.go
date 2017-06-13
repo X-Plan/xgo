@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-07
+// Last Change: 2017-06-13
 
 package xrouter
 
@@ -481,4 +481,65 @@ func lcp(a, b string) int {
 		i++
 	}
 	return i
+}
+
+// The following methods are used to debug.
+
+// Print a node recursively.
+func (n *node) print(indent int) {
+	// Format:
+	// priority:[index] path (nt:maxParams:handle)
+	fmt.Printf("%d:[%c] %s (%s:%d:%v)", strings.Repeat(" ", indent), n.priority, n.index, n.path, n.nt, n.maxParams, n.handle)
+
+	for _, child := range n.children {
+		child.print(indent + 1)
+	}
+}
+
+// Check the priority of a node recursively.
+func (n *node) checkPriority() error {
+	var sum, last uint32
+	if len(n.children) > 0 {
+		last = n.children[0].priority
+	}
+	for _, child := range n.children {
+		if child.priority > last {
+			return fmt.Errorf("The children's order of node (%s:%s) is invalid", n.nt, n.path)
+		}
+		sum += child.priority
+		last = child.priority
+		if err := child.checkPriority(); err != nil {
+			return err
+		}
+	}
+
+	if sum != n.priority {
+		return fmt.Errorf("The total priority (%d) of children is not equal to the priority (%d) of node (%s:%s)", sum, n.priority, n.nt, n.path)
+	}
+
+	return nil
+}
+
+// Check the maxParams of a node recursively.
+func (n *node) checkMaxParams() error {
+	var max uint8
+	for _, child := range n.children {
+		if err := n.checkMaxParams(); err != nil {
+			return err
+		}
+
+		if child.maxParams > max {
+			max = child.maxParams
+		}
+	}
+
+	if n.nt != static {
+		max++
+	}
+
+	if n.maxParams != max {
+		return fmt.Errorf("The maxParams of node (%s:%s) is invalid", n.nt, n.path)
+	}
+
+	return nil
 }
