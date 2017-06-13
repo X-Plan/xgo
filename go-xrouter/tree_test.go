@@ -33,7 +33,16 @@ var paths = []struct {
 	{"/get/user/info/:name", true},
 	{"/get/user/info/:nick", false}, // coflict with existing param wildcard
 	{"/get/user/info/:name/sex", true},
-	{"/get/user/info/:name/:property", false}, // wildcard conflict with the existing path segment
+	{"/get/user/info/:name/:property", false},      // wildcard conflict with the existing path segment
+	{"/get/user/info/:name/friends/*name/", false}, // catch-all routes are only allowed at the end of the path
+	{"/add/user/info/:name/friends/*/", false},     // ditto
+	{"/get/user/info/:name/friends/*name", true},
+	{"/add/user/:", false},     // param wildcard can't be empty
+	{"/add/user/:/foo", false}, // ditto
+	{"/add/user/*", false},     // ditto
+	{"/add/user/", true},
+	{"/add/user/:a/:b/", true},
+	{"/add/user/:a/:b/:c/:d/*e", true},
 }
 
 func TestAdd(t *testing.T) {

@@ -224,21 +224,28 @@ func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 			}
 		}
 
-		if child := n.child(path[i]); child != nil {
+		var child *node
+
+		if child = n.child(path[i]); child != nil {
 			if err = child.add(path[i:], full, handle); err == nil {
 				n.resort()
-				n.maxParams = max(n.maxParams, child.maxParams)
-				n.priority++
 			}
 		} else {
-			child := &node{}
+			child = &node{}
 			if err = child.construct(path[i:], full, handle); err == nil {
 				// We don't need to resort children, because the priority
 				// of new node is equal to 1 (minimum).
 				n.children = append(n.children, child)
-				n.maxParams = max(n.maxParams, child.maxParams)
-				n.priority++
 			}
+		}
+
+		if err == nil {
+			if n.nt == static {
+				n.maxParams = max(n.maxParams, child.maxParams)
+			} else {
+				n.maxParams = max(n.maxParams, child.maxParams+1)
+			}
+			n.priority++
 		}
 	}
 	return
@@ -502,7 +509,7 @@ func lcp(a, b string) int {
 func (n *node) print(indent int) {
 	// Format:
 	// priority:[index] path (nt:maxParams:handle)
-	fmt.Printf("%s%d:[%c] %s (%s:%d:%v)\n", strings.Repeat(" ", indent), n.priority, n.index, n.path, n.nt, n.maxParams, n.handle)
+	fmt.Printf("%s%d:[%c] %s (%s:%d:%v)\n", strings.Repeat("  ", indent), n.priority, n.index, n.path, n.nt, n.maxParams, n.handle)
 
 	for _, child := range n.children {
 		child.print(indent + 1)
@@ -517,7 +524,7 @@ func (n *node) checkPriority() error {
 	}
 	for _, child := range n.children {
 		if child.priority > last {
-			return fmt.Errorf("The children's order of node (%s:%s) is invalid", n.nt, n.path)
+			return fmt.Errorf("The children's order of node (%s %s) is invalid", n.nt, n.path)
 		}
 		sum += child.priority
 		last = child.priority
@@ -531,7 +538,7 @@ func (n *node) checkPriority() error {
 	}
 
 	if sum != n.priority {
-		return fmt.Errorf("The total priority (%d) of children is not equal to the priority (%d) of node (%s:%s)", sum, n.priority, n.nt, n.path)
+		return fmt.Errorf("The total priority (%d) of children is not equal to the priority (%d) of node (%s %s)", sum, n.priority, n.nt, n.path)
 	}
 
 	return nil
@@ -555,7 +562,7 @@ func (n *node) checkMaxParams() error {
 	}
 
 	if n.maxParams != max {
-		return fmt.Errorf("The maxParams of node (%s:%s) is invalid", n.nt, n.path)
+		return fmt.Errorf("The maxParams of node (%s %s) is invalid", n.nt, n.path)
 	}
 
 	return nil
