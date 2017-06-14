@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-13
+// Last Change: 2017-06-14
 
 package xrouter
 
@@ -563,6 +563,25 @@ func (n *node) checkMaxParams() error {
 
 	if n.maxParams != max {
 		return fmt.Errorf("The maxParams of node (%s %s) is invalid", n.nt, n.path)
+	}
+
+	return nil
+}
+
+// Check the index of a node recursively.
+func (n *node) checkIndex() error {
+	if len(n.path) == 0 {
+		return nil
+	}
+
+	if n.nt == static && n.index != n.path[0] {
+		return fmt.Errorf("The index (%c) of node (%s %s) is invalid", n.index, n.nt, n.path)
+	}
+
+	for _, child := range n.children {
+		if err := child.checkIndex(); err != nil {
+			return err
+		}
 	}
 
 	return nil

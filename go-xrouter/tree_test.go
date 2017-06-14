@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-13
+// Last Change: 2017-06-14
 package xrouter
 
 import (
@@ -43,6 +43,22 @@ var paths = []struct {
 	{"/add/user/", true},
 	{"/add/user/:a/:b/", true},
 	{"/add/user/:a/:b/:c/:d/*e", true},
+	{"/add/user/:a/:b/:c/:d/hello", false}, // conflict with the existing catch-all wildcard
+	{"/add/user/:name", false},             // path has already been registered
+	{"/del/user/:hell:o/world", false},     // only one wildcard per path segment is allowed
+	{"/del/user/:he*llo", false},           // ditto
+	{"/del/user/he:l:l:o/world", false},    // ditto
+	{"/del/user/:name/information", true},
+	{"/del/user/:name/info:foo:bar", false}, // trigger split operation
+	{"/del/user/:name/info/sex", true},
+	{"/del/user/:name", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l/*m", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l/foo", false},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l/", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/lmn", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k", true},
 }
 
 func TestAdd(t *testing.T) {
@@ -58,6 +74,7 @@ func TestAdd(t *testing.T) {
 		n.print(0)
 		xassert.IsNil(t, n.checkPriority())
 		xassert.IsNil(t, n.checkMaxParams())
+		xassert.IsNil(t, n.checkIndex())
 		fmt.Println("")
 	}
 }
