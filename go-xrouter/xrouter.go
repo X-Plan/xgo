@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-07
+// Last Change: 2017-06-14
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -35,6 +35,11 @@ func (xp XParam) String() string {
 	return xp.Key + "=" + xp.Value
 }
 
+// When two 'XParam's equal，the key and value of them must be equal.
+func (xp XParam) Equal(a XParam) bool {
+	return xp.Key == a.Key && xp.Value == a.Value
+}
+
 // XParams is a XParam-Slice, which returned by the XRouter.
 // The slice is ordered so you can safely read values by the index.
 type XParams []XParam
@@ -64,6 +69,26 @@ func (xps XParams) Get(name string) string {
 		}
 	}
 	return ""
+}
+
+// When two 'XParams's are equal, they should meet the following conditions.
+// 1. XParams1.length = XParams2.length
+// 2. For each i between 0 and XParams1(2).length (exclude it): XParams1(i) = XParams2(i)
+// One special case that two 'XParams's are empty, returns true.
+func (xps XParams) Equal(as XParams) (equal bool) {
+	if len(xps) == len(as) {
+		if len(xps) == 0 {
+			equal = true
+			return
+		}
+
+		for i, xp := range xps {
+			if equal = xp.Equal(as[i]); !equal {
+				break
+			}
+		}
+	}
+	return
 }
 
 // This function is used to set the 'MethodNotAllowed' field of the 'XRouter'
