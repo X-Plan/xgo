@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-14
+// Last Change: 2017-06-16
 
 package xrouter
 
@@ -402,7 +402,7 @@ outer:
 				parent, n, path = n, child, path[i:]
 				continue
 			}
-		} else if n.handle != nil {
+		} else if n.handle != nil && (n.nt == static && i == len(n.path) || n.nt != static) {
 			h = n.handle
 		}
 		break outer
@@ -430,11 +430,12 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 	} else { // len(path) > 0 && path[len(path)-1] == '/'
 		switch n.nt {
 		case static:
-			if i == len(path)-1 && i == len(n.path) {
-				if len(n.path) > 1 && n.handle != nil ||
-					len(n.path) == 1 && parent.handle != nil {
+			if len(n.path) > 1 {
+				if i == len(path)-1 && i == len(n.path) && n.handle != nil {
 					return removeSlash
 				}
+			} else if len(n.path) == 1 && parent != nil && parent.handle != nil {
+				return removeSlash
 			}
 		case param:
 			if i == len(path)-1 && n.handle != nil {

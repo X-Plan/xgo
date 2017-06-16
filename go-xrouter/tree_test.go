@@ -65,11 +65,10 @@ func TestAdd(t *testing.T) {
 				xassert.IsNil(t, err)
 			}
 		}
-		n.print(0)
+		// 		n.print(0)
 		xassert.IsNil(t, n.checkPriority())
 		xassert.IsNil(t, n.checkMaxParams())
 		xassert.IsNil(t, n.checkIndex())
-		fmt.Println("")
 	}
 }
 
@@ -85,9 +84,49 @@ func TestGet(t *testing.T) {
 		if p.ok {
 			for i := 0; i < 100; i++ {
 				path, as := generatePath(p.path)
-				h, xps, _ := n.get(path, true)
+				h, xps, _ := n.get(path, false)
 				xassert.NotNil(t, h)
 				xassert.IsTrue(t, xps.Equal(as))
+			}
+		}
+	}
+}
+
+func TestTSR(t *testing.T) {
+	var (
+		n                = &node{}
+		independentPaths []string
+	)
+
+	for _, p := range paths {
+		if p.ok {
+			if h, _, tsr := n.get(p.path, true); h == nil && tsr == notRedirect {
+				xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+				independentPaths = append(independentPaths, p.path)
+			}
+		}
+	}
+
+	// 	n.print(0)
+
+	for _, p := range independentPaths {
+		path, as := generatePath(p)
+		h, xps, tsr := n.get(path, false)
+		xassert.NotNil(t, h)
+		xassert.IsTrue(t, xps.Equal(as))
+		xassert.Equal(t, tsr, notRedirect)
+
+		if path[len(path)-1] == '/' {
+			h, _, tsr := n.get(path[:len(path)-1], true)
+			xassert.IsNil(t, h)
+			xassert.Equal(t, tsr, addSlash)
+		} else {
+			h, _, tsr := n.get(path+"/", true)
+			if h != nil {
+				// Must contain catch-all wildcard.
+				xassert.NotEqual(t, strings.IndexByte(p, '*'), -1)
+			} else {
+				xassert.Equal(t, tsr, removeSlash)
 			}
 		}
 	}
