@@ -1,10 +1,9 @@
 // tree_test.go
 //
 // Author: blinklv <blinklv@icloud.com>
-// Create Time: 2017-03-16
+// Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-25
-
+// Last Change: 2017-06-16
 package xrouter
 
 import (
@@ -16,307 +15,156 @@ import (
 	"testing"
 )
 
-func TestGet(t *testing.T) {
-	var paths = []string{
-		"/remembering/that/I'll/be/dead/soon/is/the/most/important/tool/",
-		"/I've/encounterd/to/help/me/make/the/big/choices/in/life",
-		"/because/almost/:everything/",
-		"/all/external/exp:ectations",
-		"/all/pride",
-		"/all/fear/of/embarr:assment/of/failure/",
-		"/these/things/just/fall/away/in/the/face/of/death/",
-		"/lea:ving/only/what/is/truly/*important",
-		"/remembering/that/you/are/going/to/die/",
-		"/is/the/best/way/",
-		"/to/avoid/the/trap/of/thinking/you/have/something/to/lose",
-		"/you/are/alr:eady/naked",
-		"/there/is/no/reason/not/to/follow/your/heart",
-	}
+var paths = []struct {
+	path string
+	ok   bool
+}{
+	{"", false}, // path argument is empty
+	{"/", true},
+	{"/get/user/scheme", true},
+	{"/get/user/scheme", false}, // path has already been registered
+	{"/get/user/count", true},
+	{"/get/user/info/:name", true},
+	{"/get/user/info/:nick", false}, // coflict with existing param wildcard
+	{"/get/user/info/:name/sex", true},
+	{"/get/user/info/:name/:property", false},      // wildcard conflict with the existing path segment
+	{"/get/user/info/:name/friends/*name/", false}, // catch-all routes are only allowed at the end of the path
+	{"/add/user/info/:name/friends/*/", false},     // ditto
+	{"/get/user/info/:name/friends/*name", true},
+	{"/add/user/:", false},     // param wildcard can't be empty
+	{"/add/user/:/foo", false}, // ditto
+	{"/add/user/*", false},     // ditto
+	{"/add/user/", true},
+	{"/add/user/:a/:b/", true},
+	{"/add/user/:a/:b/:c/:d/*e", true},
+	{"/add/user/:a/:b/:c/:d/hello", false}, // conflict with the existing catch-all wildcard
+	{"/add/user/:name", false},             // path has already been registered
+	{"/del/user/:hell:o/world", false},     // only one wildcard per path segment is allowed
+	{"/del/user/:he*llo", false},           // ditto
+	{"/del/user/he:l:l:o/world", false},    // ditto
+	{"/del/user/:name/information", true},
+	{"/del/user/:name/info:foo:bar", false}, // trigger split operation
+	{"/del/user/:name/info/sex", true},
+	{"/del/user/:name", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l/*m", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l/foo", false},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l/", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/l", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/lmn", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k/", true},
+	{"/update/:a/b/:c/d/:e/f/:g/h/:i/j/:k", true},
+}
 
-	n := &node{}
-	for _, path := range paths {
-		xassert.IsNil(t, n.add(path, func(path string) XHandle {
-			return XHandle(func(_ http.ResponseWriter, _ *http.Request, xps XParams) {
-				fmt.Printf("%s [%s]\n", path, xps)
-			})
-		}(path)))
-	}
-
-	var xps XParams
-	for _, path := range paths {
-		xps = XParams{}
-		handle := n.get(path, &xps, true)
-		xassert.NotNil(t, handle)
-		handle(nil, nil, xps)
-
-		xps = XParams{}
-		if path[len(path)-1] == '/' {
-			handle = n.get(path[:len(path)-1], &xps, true)
-		} else {
-			handle = n.get(path+"/", &xps, true)
-		}
-		xassert.NotNil(t, handle)
-		handle(nil, nil, xps)
-	}
-
-outer:
-	for _, path := range paths {
-		xps = XParams{}
-		// Sometimes it will return a non-nil handle, because the '!@#$%^"
-		// replaces a part of a wildcard, so we need exclude this case.
-		handle := n.get(xrandstring.Replace(path, "!@#$%^"), &xps, true)
-		if handle != nil {
-			for _, xp := range xps {
-				if strings.Contains(xp.Value, "!@#$%^") {
-					continue outer
-				}
+func TestAdd(t *testing.T) {
+	var n = &node{}
+	for _, p := range paths {
+		if err := n.add(p.path, p.path, generateHandle(p.path)); err != nil {
+			if !p.ok {
+				fmt.Println(err)
+			} else {
+				xassert.IsNil(t, err)
 			}
 		}
-		xassert.IsNil(t, handle)
+		// 		n.print(0)
+		xassert.IsNil(t, n.checkPriority())
+		xassert.IsNil(t, n.checkMaxParams())
+		xassert.IsNil(t, n.checkIndex())
 	}
 }
 
-// Test 'node.add' function, but doesn't include the error case.
-func TestAddCorrect(t *testing.T) {
-	var paths = []string{
-		"/",
-		"/who/are/you/?",
-		"/who/is/:she",
-		"/how/are/*you",
-		"/where/is/:xxx/*she",
-		"/how/old/are/you/",
-		"/root/who/are/you/",
-		"/root/how/are/you",
-		"/root/how/are/you/my/friend",
-		"/root/who/is/he",
-		"/what/you/want/to/:do/",
-		"/can/you/tell/me/what/:be/:possession/*favorite",
-		"/could/you/take/a/pass/at/this/implementation",
-		"/what's/your/favorite/?/If you known, please/tell me.",
-		"/gists/:id/star",
-		"/gists/:id/",
-		"/一花一世界/一叶一菩提/", // We don't use chinese in url path. :)
-		"/一叶:障目",
-	}
-
-	n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-	for _, path := range paths {
-		xassert.IsNil(t, n.add(path, handle))
-	}
-	xassert.Equal(t, int(n.priority), len(paths))
-	checkPriority(n)
-	printNode(n, 0)
-}
-
-// Test 'node.construct' function, and the 'path' is valid.
-func TestConstructCorrect(t *testing.T) {
-	var paths = []string{
-		"/who/are/you/?",
-		"/",
-		":hello/world/path",
-		"he:llo/world/*path",
-		"he:llo/world/*path",
-		"he:llo/world/pa*th",
-		"h:ello/wo:rld/path/",
-		"h:ello/wo:rld/pa:th/",
-		"h:ello/w:orld/pa:th",
-		"h:ello/w:orld/path",
-	}
-
-	for _, path := range paths {
-		n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-		xassert.IsNil(t, n.construct(path, "full path", handle))
-		printNode(n, 0)
-	}
-}
-
-// Test 'node.construct' function, but the 'path' is invalid.
-func TestConstructError(t *testing.T) {
-	var paths = []struct {
-		path   string
-		reason string
-	}{
-		{"/who/are/y*ou/", `'\*ou' in path 'full path': catch-all routes are only allowed at the end of the path`},
-		{"/who/are/you*", `'\*' in path 'full path': catch-all wildcard can't be empty`},
-		{":hello/wor:ld/Who:are:you/Am/I/alone", `':are:you/Am/I/alone' in path 'full path': only one wildcard per path segment is allowed`},
-		{"hello/wo:rld*xxx/aaa", `':rld\*xxx/aaa' in path 'full path': only one wildcard per path segment is allowed`},
-		{"hello/wo*rld:xxx/aaa", `'\*rld' in path 'full path': catch-all routes are only allowed at the end of the path`},
-		{"hello:/world", `':/world' in path 'full path': param wildcard can't be empty`},
+func TestGet(t *testing.T) {
+	var n = &node{}
+	for _, p := range paths {
+		if p.ok {
+			xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+		}
 	}
 
 	for _, p := range paths {
-		n, handle := &node{}, func(http.ResponseWriter, *http.Request, XParams) {}
-		xassert.Match(t, n.construct(p.path, "full path", handle), p.reason)
-	}
-}
-
-func TestSplit(t *testing.T) {
-	// The 'original' field and the 'n.path' need have a common
-	// prefix, but it should be the substring of the 'n.path'
-	// (can't be equal to the 'n.path'), otherwise the initial
-	// condition of the 'n.split' function can't be statisfied.
-	var examples = [][]struct {
-		original string
-		rest     string
-		priority int
-		handle   XHandle
-	}{
-		{{"begin/who/is/she", "is/she", 1, nil}},
-		{{"begin/who/are you?", " you?", 1, nil}},
-		{{"begin/how/are/you/?", "how/are/you/?", 1, nil}},
-		{{"begin/who/a", "", 2, nil}},
-		{{"begin/who", "", 2, nil}},
-		{{"begin/", "", 2, nil}},
-		{{"begin/who/is/he", "is/he", 1, nil}, {"begin/who", "", 2, nil}, {"beg", "", 3, nil}},
-	}
-
-	var (
-		n      *node
-		handle = func(http.ResponseWriter, *http.Request, XParams) {}
-	)
-
-	for _, e := range examples {
-		n = &node{}
-		xassert.IsNil(t, n.construct("begin/who/are/you/?/", "full path", handle))
-		for _, p := range e {
-			p.handle = func(http.ResponseWriter, *http.Request, XParams) {}
-			xassert.Match(t, n.split(nil, lcp(p.original, n.path), p.original, p.handle), p.rest)
-			xassert.Equal(t, int(n.priority), p.priority)
-			printNode(n, 0)
-		}
-	}
-}
-
-// Check whether the priority field of a node is right.
-func checkPriority(n *node) uint32 {
-	var prior uint32
-	if n.handle != nil && !n.tsr {
-		prior = 1
-	}
-
-	for _, child := range n.children {
-		prior += checkPriority(child)
-	}
-
-	if prior != n.priority {
-		printNode(n, 0)
-		panic("priority field is invalid")
-	}
-
-	return prior
-}
-
-// Print node in tree-text format.
-func printNode(n *node, depth int) {
-	if n == nil {
-		return
-	}
-
-	if depth == 0 {
-		fmt.Println("")
-	}
-
-	fmt.Printf("%s%s [%c] (%s:%v:%d) [%v] \n", strings.Repeat(" ", depth), n.path, n.index, n.nt, n.tsr, n.priority, n.handle)
-	for _, child := range n.children {
-		printNode(child, depth+len(n.path))
-	}
-}
-
-func benchmarkGet(b *testing.B, num, depth, length int) {
-	paths, _ := generatePaths(num, depth, length)
-	n := &node{}
-	for _, path := range paths {
-		xassert.IsNil(b, n.add(path, generateXHandle(path)))
-	}
-
-	b.Run(fmt.Sprintf("[node] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, path := range paths {
-				var xps XParams
-				n.get(path, &xps, true)
+		if p.ok {
+			for i := 0; i < 100; i++ {
+				path, as := generatePath(p.path)
+				h, xps, _ := n.get(path, false)
+				xassert.NotNil(t, h)
+				xassert.IsTrue(t, xps.Equal(as))
 			}
 		}
-	})
-
-	dm := &defaultMux{}
-	for _, path := range paths {
-		dm.add(path, generateXHandle(path))
 	}
-
-	b.Run(fmt.Sprintf("[default mux] num=%d, depth=%d, length=%d", num, depth, length), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			for _, path := range paths {
-				dm.get(path)
-			}
-		}
-	})
 }
 
-func BenchmarkGet2_4_6(b *testing.B)  { benchmarkGet(b, 2, 4, 6) }
-func BenchmarkGet2_10_8(b *testing.B) { benchmarkGet(b, 2, 10, 8) }
-func BenchmarkGet3_8_8(b *testing.B)  { benchmarkGet(b, 3, 8, 8) }
-
-func generateXHandle(path string) XHandle {
-	return XHandle(func(_ http.ResponseWriter, _ *http.Request, xps XParams) {
-		fmt.Printf("%s [%s]\n", path, xps)
-	})
-}
-
-// 'defaultMux' is a simplified version of 'http.ServeMux', the basic
-// idea of matching url is Most-specific (longest) pattern wins.
-type defaultMux struct {
-	m map[string]XHandle
-}
-
-func (dm *defaultMux) add(path string, handle XHandle) {
-	if dm.m == nil {
-		dm.m = make(map[string]XHandle)
-	}
-	dm.m[path] = handle
-}
-
-func (dm *defaultMux) get(path string) XHandle {
-	for k, h := range dm.m {
-		if !dm.pathmatch(k, path) {
-			continue
-		}
-		return h
-	}
-	return nil
-}
-
-func (dm *defaultMux) pathmatch(pattern, path string) bool {
-	if len(pattern) == 0 {
-		return false
-	}
-	n := len(pattern)
-	if pattern[n-1] != '/' {
-		return pattern == path
-	}
-	return len(path) >= n && path[0:n] == pattern
-}
-
-// I need a function to generate many random paths, but there
-// are not conflicts among them.
-func generatePaths(n, depth, length int) ([]string, int) {
+func TestTSR(t *testing.T) {
 	var (
-		total = (pow(n, depth) - 1) / (n - 1)
-		paths = make([]string, total)
+		n                = &node{}
+		independentPaths []string
 	)
 
-	paths[0] = "/" + xrandstring.Get(length)
-	for i := 1; i < total; i++ {
-		pi := (i - 1) / n
-		paths[i] = paths[pi] + "/" + xrandstring.Get(length)
+	for _, p := range paths {
+		if p.ok {
+			if h, _, tsr := n.get(p.path, true); h == nil && tsr == notRedirect {
+				xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+				independentPaths = append(independentPaths, p.path)
+			}
+		}
 	}
 
-	return paths, total
+	// 	n.print(0)
+
+	for _, p := range independentPaths {
+		path, as := generatePath(p)
+		h, xps, tsr := n.get(path, false)
+		xassert.NotNil(t, h)
+		xassert.IsTrue(t, xps.Equal(as))
+		xassert.Equal(t, tsr, notRedirect)
+
+		if path[len(path)-1] == '/' {
+			h, _, tsr := n.get(path[:len(path)-1], true)
+			xassert.IsNil(t, h)
+			xassert.Equal(t, tsr, addSlash)
+		} else {
+			h, _, tsr := n.get(path+"/", true)
+			if h != nil {
+				// Must contain catch-all wildcard.
+				xassert.NotEqual(t, strings.IndexByte(p, '*'), -1)
+			} else {
+				xassert.Equal(t, tsr, removeSlash)
+			}
+		}
+	}
 }
 
-func pow(a, b int) int {
-	c := 1
-	for i := 0; i < b; i++ {
-		c *= a
+// Replace wildcard with a random string. We think all pattern is valid.
+func generatePath(pattern string) (path string, xps XParams) {
+	for len(pattern) > 0 {
+		var i int
+		if i = strings.IndexAny(pattern, ":*"); i != -1 {
+			path += pattern[:i]
+			pattern = pattern[i:]
+			if pattern[0] == ':' {
+				if i = strings.IndexByte(pattern, '/'); i == -1 {
+					i = len(pattern)
+				}
+				xps = append(xps, XParam{Key: pattern[1:i], Value: xrandstring.Get(8)})
+				path += xps[len(xps)-1].Value
+				pattern = pattern[i:]
+			} else { // pattern[0] == '*'
+				xps = append(xps, XParam{Key: pattern[1:], Value: xrandstring.Get(8)})
+				path += xps[len(xps)-1].Value
+				break
+			}
+		} else {
+			path += pattern
+			break
+		}
 	}
-	return c
+	return
+}
+
+func generateHandle(path string) XHandle {
+	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
+		msg := fmt.Sprintf("path: %s, params: %s", path, xps)
+		fmt.Println(msg)
+		if w != nil {
+			w.Write([]byte(msg))
+		}
+	}
 }

@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-02
+// Last Change: 2017-06-16
 
 package xrouter
 
@@ -13,6 +13,50 @@ import (
 	"strings"
 	"sync"
 )
+
+// 'tree' contains the root node of the tree, and it also
+// has a read-write lock to make it safe in concurrent scenario.
+type tree struct {
+	rwmtx *sync.RWMutex
+	n     *node
+}
+
+func (t *tree) add(path string, handle XHandle) error {
+	t.rwmtx.Lock()
+	err := t.n.add(path, path, handle)
+	t.rwmtx.Unlock()
+	return err
+}
+
+func (t *tree) remove(path string) error {
+	t.rwmtx.Lock()
+	ok := t.n.remove(path)
+	t.rwmtx.Unlock()
+
+	if ok {
+		return nil
+	} else {
+		return fmt.Errorf("path (%s) hasn't been registered", path)
+	}
+}
+
+func (t *tree) get(path string, enableTSR bool) (h XHandle, xps XParams, tsr tsrType) {
+	t.rwmtx.RLock()
+	if len(t.n.path) > 0 {
+		h, xps, tsr = t.n.get(path, enableTSR)
+	}
+	t.rwmtx.RUnlock()
+	return
+}
+
+// If the path length of the root node is zero, which
+// represent this tree is empty.
+func (t *tree) isempty() bool {
+	t.rwmtx.RLock()
+	result := len(t.n.path) == 0
+	t.rwmtx.RUnlock()
+	return result
+}
 
 type nodeType uint8
 
@@ -72,7 +116,7 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 		i := lcp(path, n.path)
 		if i < len(path) {
 			if i == 0 && (path[i] == ':' || path[i] == '*') {
-				err = fmt.Errorf("'%s' in path '%s': wildcard confilicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
+				err = fmt.Errorf("'%s' in path '%s': wildcard conflicts with the existing path segment '%s' in prefix '%s'", path[i:], full, n.path[i:], full[:strings.Index(full, path)]+n.path)
 				break
 			}
 
@@ -95,7 +139,7 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 	case param:
 		i := lcp(path, n.path)
 		if i == len(n.path) && i < len(path) {
-			err = next(i, path, full, handle)
+			err = n.next(i, path, full, handle)
 		} else if i == len(n.path) && i == len(path) {
 			if n.handle == nil {
 				n.handle, n.priority = handle, n.priority+1
@@ -116,22 +160,92 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 	return
 }
 
+// Remove a register handle. I implement this function by recursively calling.
+// The path parameter must match a existing path exactly, It won't consider
+// wildcard and trailing slash. If the path '/foo/:bar/who/are/*you' has been
+// registerd, we can't use the argument '/foo/:xxx/who/are/*ooo' to remove it.
+func (n *node) remove(path string) (ok bool) {
+	var i = lcp(n.path, path)
+	if i == len(n.path) && i == len(path) {
+		if n.handle != nil {
+			n.priority, n.handle = n.priority-1, nil
+			if len(n.children) == 1 {
+				n.concat()
+			}
+			ok = true
+		}
+	} else if i == len(n.path) && i < len(path) {
+		var k int
+		for k = 0; k < len(n.children); k++ {
+			if n.children[k].path[0] == path[i] {
+				break
+			}
+		}
+
+		if k < len(n.children) && n.children[k].priority == 0 {
+			if ok = n.children[k].remove(path[i:]); ok {
+				n.children = append(n.children[:i], n.children[i+1:]...)
+				n.priority--
+				n.setMaxParams()
+
+				if len(n.children) == 1 && n.handle == nil {
+					n.concat()
+				}
+			}
+		}
+	}
+
+	return
+}
+
+// Concate the current node with the child node, the current node
+// must only have one child node.
+func (n *node) concat() {
+	child := n.children[0]
+	if child.nt == static {
+		if n.nt == static || (n.nt == param && child.path == "/") {
+			n.path += child.path
+			n.children, n.handle = child.children, child.handle
+		}
+	}
+}
+
 // Move to next child node (If not exist, create it).
 func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 	if i < len(path) {
-		if child := n.child(path[i]); child != nil {
+		if len(n.children) > 0 && (path[i] == ':' || path[i] == '*') {
+			// If the children of a node have one static node, all children
+			// must be static. If a node exists one static node, will produce
+			// a conflict.
+			if n.children[0].nt == static {
+				// The result must be non-nil.
+				err = n.children[0].add(path[i:], full, handle)
+				return
+			}
+		}
+
+		var child *node
+
+		if child = n.child(path[i]); child != nil {
 			if err = child.add(path[i:], full, handle); err == nil {
 				n.resort()
-				n.maxParams = max(n.maxParams, child.maxParams)
 			}
 		} else {
-			child := &node{}
+			child = &node{}
 			if err = child.construct(path[i:], full, handle); err == nil {
 				// We don't need to resort children, because the priority
 				// of new node is equal to 1 (minimum).
 				n.children = append(n.children, child)
-				n.maxParams = max(n.maxParams, child.maxParams)
 			}
+		}
+
+		if err == nil {
+			if n.nt == static {
+				n.maxParams = max(n.maxParams, child.maxParams)
+			} else {
+				n.maxParams = max(n.maxParams, child.maxParams+1)
+			}
+			n.priority++
 		}
 	}
 	return
@@ -197,9 +311,9 @@ func (n *node) construct(path string, full string, handle XHandle) (err error) {
 
 func (n *node) split(i int, handle XHandle) error {
 	if i > 0 {
-		child := *node
-		child.path, child.index = path[i:], path[i]
-		n.path, n.children = path[:i], []*node{child}
+		child := *n
+		child.path, child.index = n.path[i:], n.path[i]
+		n.path, n.children = n.path[:i], []*node{&child}
 
 		if n.nt == param {
 			child.nt, child.maxParams = static, child.maxParams-1
@@ -212,6 +326,19 @@ func (n *node) split(i int, handle XHandle) error {
 		}
 	}
 	return nil
+}
+
+func (n *node) setMaxParams() {
+	n.maxParams = 0
+	for _, child := range n.children {
+		if child.maxParams > n.maxParams {
+			n.maxParams = child.maxParams
+		}
+	}
+
+	if n.nt == param || n.nt == all {
+		n.maxParams++
+	}
 }
 
 // The inverse operator of split function, used in recovery.
@@ -275,7 +402,7 @@ outer:
 				parent, n, path = n, child, path[i:]
 				continue
 			}
-		} else if n.handle != nil {
+		} else if n.handle != nil && (n.nt == static && i == len(n.path) || n.nt != static) {
 			h = n.handle
 		}
 		break outer
@@ -303,14 +430,15 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 	} else { // len(path) > 0 && path[len(path)-1] == '/'
 		switch n.nt {
 		case static:
-			if i == len(path)-1 && i == len(n.path) {
-				if len(n.path) > 1 && n.handle != nil ||
-					len(n.path) == 1 && parent.handle != nil {
+			if len(n.path) > 1 {
+				if i == len(path)-1 && i == len(n.path) && n.handle != nil {
 					return removeSlash
 				}
+			} else if len(n.path) == 1 && parent != nil && parent.handle != nil {
+				return removeSlash
 			}
 		case param:
-			if i == len(path)-1 && n.n.handle != nil {
+			if i == len(path)-1 && n.handle != nil {
 				return removeSlash
 			}
 		}
@@ -360,7 +488,7 @@ func min(a, b int) int {
 	return b
 }
 
-func max(a, b int) int {
+func max(a, b uint8) uint8 {
 	if a >= b {
 		return a
 	}
@@ -374,4 +502,88 @@ func lcp(a, b string) int {
 		i++
 	}
 	return i
+}
+
+// The following functions/methods are used to debug.
+
+// Print a node recursively.
+func (n *node) print(indent int) {
+	// Format:
+	// priority:[index] path (nt:maxParams:handle)
+	fmt.Printf("%s%d:[%c] %s (%s:%d:%v)\n", strings.Repeat("  ", indent), n.priority, n.index, n.path, n.nt, n.maxParams, n.handle)
+
+	for _, child := range n.children {
+		child.print(indent + 1)
+	}
+}
+
+// Check the priority of a node recursively.
+func (n *node) checkPriority() error {
+	var sum, last uint32
+	if len(n.children) > 0 {
+		last = n.children[0].priority
+	}
+	for _, child := range n.children {
+		if child.priority > last {
+			return fmt.Errorf("The children's order of node (%s %s) is invalid", n.nt, n.path)
+		}
+		sum += child.priority
+		last = child.priority
+		if err := child.checkPriority(); err != nil {
+			return err
+		}
+	}
+
+	if n.handle != nil {
+		sum++
+	}
+
+	if sum != n.priority {
+		return fmt.Errorf("The total priority (%d) of children is not equal to the priority (%d) of node (%s %s)", sum, n.priority, n.nt, n.path)
+	}
+
+	return nil
+}
+
+// Check the maxParams of a node recursively.
+func (n *node) checkMaxParams() error {
+	var max uint8
+	for _, child := range n.children {
+		if err := child.checkMaxParams(); err != nil {
+			return err
+		}
+
+		if child.maxParams > max {
+			max = child.maxParams
+		}
+	}
+
+	if n.nt != static {
+		max++
+	}
+
+	if n.maxParams != max {
+		return fmt.Errorf("The maxParams of node (%s %s) is invalid", n.nt, n.path)
+	}
+
+	return nil
+}
+
+// Check the index of a node recursively.
+func (n *node) checkIndex() error {
+	if len(n.path) == 0 {
+		return nil
+	}
+
+	if n.nt == static && n.index != n.path[0] {
+		return fmt.Errorf("The index (%c) of node (%s %s) is invalid", n.index, n.nt, n.path)
+	}
+
+	for _, child := range n.children {
+		if err := child.checkIndex(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

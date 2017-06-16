@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-26
+// Last Change: 2017-06-14
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -33,6 +33,11 @@ type XParam struct {
 // The string format of a XParam is 'key=value'.
 func (xp XParam) String() string {
 	return xp.Key + "=" + xp.Value
+}
+
+// When two 'XParam's equal，the key and value of them must be equal.
+func (xp XParam) Equal(a XParam) bool {
+	return xp.Key == a.Key && xp.Value == a.Value
 }
 
 // XParams is a XParam-Slice, which returned by the XRouter.
@@ -66,6 +71,26 @@ func (xps XParams) Get(name string) string {
 	return ""
 }
 
+// When two 'XParams's are equal, they should meet the following conditions.
+// 1. XParams1.length = XParams2.length
+// 2. For each i between 0 and XParams1(2).length (exclude it): XParams1(i) = XParams2(i)
+// One special case that two 'XParams's are empty, returns true.
+func (xps XParams) Equal(as XParams) (equal bool) {
+	if len(xps) == len(as) {
+		if len(xps) == 0 {
+			equal = true
+			return
+		}
+
+		for i, xp := range xps {
+			if equal = xp.Equal(as[i]); !equal {
+				break
+			}
+		}
+	}
+	return
+}
+
 // This function is used to set the 'MethodNotAllowed' field of the 'XRouter'
 // when you don't set it, you should covert it to 'http.HandlerFunc' type.
 func DefaultMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
@@ -86,12 +111,23 @@ func SupportMethod(method string) bool {
 
 // XConfig is used to create a new XRouter.
 type XConfig struct {
-	// If the current route can't be matched, but a handler for the
-	// path with (without) the trailing slash exists, which will be
-	// used to handle this request. For example if the path of request
-	// is /foo/,  but a route only exists for /foo, the handler of
-	// /foo will be used.
-	CompatibleWithTrailingSlash bool
+	// Enables automatic redirection if the current route can't be matched but a
+	// handler for the path with (without) the trailing slash exists.
+	// For example if /foo/ is requested but a route only exists for /foo, the
+	// client is redirected to /foo with http status code 301 for GET requests
+	// and 307 for all other request methods.
+	RedirectTrailingSlash bool
+
+	// If enabled, the router tries to fix the current request path, if no
+	// handle is registered for it.
+	// First superfluous path elements like ../ or // are removed.
+	// Afterwards the router does a case-insensitive lookup of the cleaned path.
+	// If a handle can be found for this route, the router makes a redirection
+	// to the corrected path with status code 301 for GET requests and 307 for
+	// all other request methods.
+	// For example /FOO and /..//Foo could be redirected to /foo.
+	// RedirectTrailingSlash is independent of this option.
+	RedirectFixedPath bool
 
 	// If enabled, the router will reply to OPTIONS requests, but
 	// the custom OPTIONS handlers has more priority than automatic replies.
@@ -127,13 +163,13 @@ type XRouter struct {
 	// The following fields are same as the fields in XConfig
 	// except the first letter is lowercase. Because XRouter
 	// is designed to run safely in a concurrent environment,
-	// so the fields of XRouter can't export to user.
-	compatibleWithTrailingSlash bool
-	handleOptions               bool
-	handleMethodNotAllowed      bool
-	notFound                    http.Handler
-	methodNotAllowed            http.Handler
-	panicHandler                func(http.ResponseWriter, *http.Request, interface{})
+	// so the fields of XRouter can't be exported to user.
+	redirectTrailingSlash  bool
+	handleOptions          bool
+	handleMethodNotAllowed bool
+	notFound               http.Handler
+	methodNotAllowed       http.Handler
+	panicHandler           func(http.ResponseWriter, *http.Request, interface{})
 }
 
 // New returns a new initialized XRouter.
@@ -144,12 +180,12 @@ func New(xcfg *XConfig) *XRouter {
 
 	xr := &XRouter{
 		trees: make(map[string]*tree),
-		compatibleWithTrailingSlash: xcfg.CompatibleWithTrailingSlash,
-		handleOptions:               xcfg.HandleOptions,
-		handleMethodNotAllowed:      xcfg.HandleMethodNotAllowed,
-		notFound:                    xcfg.NotFound,
-		methodNotAllowed:            xcfg.MethodNotAllowed,
-		panicHandler:                xcfg.PanicHandler,
+		redirectTrailingSlash:  xcfg.RedirectTrailingSlash,
+		handleOptions:          xcfg.HandleOptions,
+		handleMethodNotAllowed: xcfg.HandleMethodNotAllowed,
+		notFound:               xcfg.NotFound,
+		methodNotAllowed:       xcfg.MethodNotAllowed,
+		panicHandler:           xcfg.PanicHandler,
 	}
 
 	if xr.notFound == nil {
@@ -210,7 +246,18 @@ func (xr *XRouter) Handle(method, path string, handle XHandle) error {
 	}
 
 	// Fixing the path before it's registered.
-	return t.add(CleanPath(path), handle)
+	path = CleanPath(path)
+	return t.add(path, handle)
+}
+
+// Remove unregister a existing request handle with given path and method.
+func (xr *XRouter) Remove(method, path string) error {
+	t := xr.trees[strings.ToUpper(method)]
+	if t == nil {
+		return fmt.Errorf("http method (%s) is unsupported", method)
+	}
+
+	return t.remove(CleanPath(path))
 }
 
 // ServeHTTP is the implementation of the http.Handler interface.
@@ -219,21 +266,31 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer xr.capturePanic(w, r)
 	}
 
-	// Fix the current request path, but exclude the asterisk ('*').
-	path := "*"
-	if r.URL.Path != "*" {
-		// 		path = CleanPath(r.URL.Path)
-		path = r.URL.Path
-	}
-
-	var xps XParams
+	path := r.URL.Path
 
 	if t := xr.trees[r.Method]; t != nil {
 		// If the results of the t.isempty function equals to true,
-		// the t.get function will also return the nil.
-		if handle := t.get(path, &xps, xr.compatibleWithTrailingSlash); handle != nil {
+		// the t.get function will also return the nil handle.
+		if handle, xps, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil {
 			handle(w, r, xps)
 			return
+		} else if r.Method != "CONNECT" && path != "/" {
+			code := 301 // Permanent redirect, request with GET method
+			if r.Method != "GET" {
+				// Temporary redirect, request with same method
+				// As of Go 1.3, Go does not support status code 308.
+				code = 307
+			}
+
+			if xr.redirectTrailingSlash {
+				if tsr == addSlash {
+					r.URL.Path = path + "/"
+				} else if tsr == removeSlash {
+					r.URL.Path = path[:len(path)-1]
+				}
+				http.Redirect(w, r, r.URL.String(), code)
+				return
+			}
 		}
 	}
 
@@ -280,8 +337,7 @@ func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
 				continue
 			}
 
-			var xps XParams
-			if t.get(path, &xps, xr.compatibleWithTrailingSlash) != nil {
+			if handle, _, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil || tsr > 0 {
 				if len(allow) == 0 {
 					allow = method
 				} else {
