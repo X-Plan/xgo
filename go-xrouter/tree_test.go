@@ -3,23 +3,17 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-14
+// Last Change: 2017-06-16
 package xrouter
 
 import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"github.com/X-Plan/xgo/go-xrandstring"
 	"net/http"
+	"strings"
 	"testing"
 )
-
-func generateHandle(path string) XHandle {
-	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
-		msg := fmt.Sprintf("path: %s, params: %s", path, xps)
-		fmt.Println(msg)
-		w.Write([]byte(msg))
-	}
-}
 
 var paths = []struct {
 	path string
@@ -76,5 +70,62 @@ func TestAdd(t *testing.T) {
 		xassert.IsNil(t, n.checkMaxParams())
 		xassert.IsNil(t, n.checkIndex())
 		fmt.Println("")
+	}
+}
+
+func TestGet(t *testing.T) {
+	var n = &node{}
+	for _, p := range paths {
+		if p.ok {
+			xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+		}
+	}
+
+	for _, p := range paths {
+		if p.ok {
+			for i := 0; i < 100; i++ {
+				path, as := generatePath(p.path)
+				h, xps, _ := n.get(path, true)
+				xassert.NotNil(t, h)
+				xassert.IsTrue(t, xps.Equal(as))
+			}
+		}
+	}
+}
+
+// Replace wildcard with a random string. We think all pattern is valid.
+func generatePath(pattern string) (path string, xps XParams) {
+	for len(pattern) > 0 {
+		var i int
+		if i = strings.IndexAny(pattern, ":*"); i != -1 {
+			path += pattern[:i]
+			pattern = pattern[i:]
+			if pattern[0] == ':' {
+				if i = strings.IndexByte(pattern, '/'); i == -1 {
+					i = len(pattern)
+				}
+				xps = append(xps, XParam{Key: pattern[1:i], Value: xrandstring.Get(8)})
+				path += xps[len(xps)-1].Value
+				pattern = pattern[i:]
+			} else { // pattern[0] == '*'
+				xps = append(xps, XParam{Key: pattern[1:], Value: xrandstring.Get(8)})
+				path += xps[len(xps)-1].Value
+				break
+			}
+		} else {
+			path += pattern
+			break
+		}
+	}
+	return
+}
+
+func generateHandle(path string) XHandle {
+	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
+		msg := fmt.Sprintf("path: %s, params: %s", path, xps)
+		fmt.Println(msg)
+		if w != nil {
+			w.Write([]byte(msg))
+		}
 	}
 }
