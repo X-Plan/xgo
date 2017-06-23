@@ -148,7 +148,12 @@ func (n *node) add(path string, full string, handle XHandle) (err error) {
 			}
 		} else if i == len(n.path)-1 && n.path[len(n.path)-1] == '/' {
 			defer n.combine(&err)
-			err = n.split(i, handle)
+			if err = n.split(i, handle); err == nil {
+				// Combine single '/' with its children.
+				if child := n.children[0]; child.handle == nil && len(child.children) == 1 {
+					child.concat()
+				}
+			}
 		} else {
 			err = fmt.Errorf("'%s' in path '%s': conflict with existing param wildcard '%s' in prefix '%s'", path, full, n.path, full[:strings.Index(full, path)]+n.path)
 		}
@@ -213,6 +218,10 @@ func (n *node) concat() {
 		if n.nt == static || (n.nt == param && child.path == "/") {
 			n.path += child.path
 			n.children, n.handle = child.children, child.handle
+		} else if n.nt == param && child.index == byte('/') {
+			// The prefix of child's path is '/', but the child's path is not equal to "/".
+			n.path += "/"
+			child.path, child.index = child.path[1:], child.path[1]
 		}
 	}
 }
@@ -243,6 +252,7 @@ func (n *node) next(i int, path, full string, handle XHandle) (err error) {
 				// We don't need to resort children, because the priority
 				// of new node is equal to 1 (minimum).
 				n.children = append(n.children, child)
+				n.resort()
 			}
 		}
 
@@ -437,11 +447,12 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 	} else { // len(path) > 0 && path[len(path)-1] == '/'
 		switch n.nt {
 		case static:
-			if len(n.path) > 1 {
-				if i == len(path)-1 && i == len(n.path) && n.handle != nil {
+			if i < len(path) && path[i] == '/' {
+				if (i == len(n.path) && n.handle != nil) ||
+					(i == 0 && parent != nil && parent.handle != nil) {
 					return removeSlash
 				}
-			} else if len(n.path) == 1 && parent != nil && parent.handle != nil {
+			} else if path == "/" && parent != nil && parent.handle != nil {
 				return removeSlash
 			}
 		case param:
@@ -481,7 +492,8 @@ func (ns nodes) Len() int {
 }
 
 func (ns nodes) Less(i, j int) bool {
-	return ns[i].priority > ns[j].priority
+	return (ns[i].priority > ns[j].priority) ||
+		(ns[i].priority == ns[j].priority && ns[i].index < ns[j].index)
 }
 
 func (ns nodes) Swap(i, j int) {
@@ -522,6 +534,44 @@ func (n *node) print(indent int) {
 	for _, child := range n.children {
 		child.print(indent + 1)
 	}
+}
+
+// Compare Two nodes recursively.
+func (n *node) Equal(x *node) error {
+	ok := n.path == x.path &&
+		n.maxParams == x.maxParams &&
+		n.index == x.index &&
+		n.nt == x.nt &&
+		n.priority == x.priority &&
+		len(n.children) == len(x.children)
+
+	if !ok {
+		return fmt.Errorf("node #1 (%v) is not equal to node #2 (%v)", n, x)
+	}
+
+	for i := 0; i < len(n.children); i++ {
+		if err := n.children[i].Equal(x.children[i]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Check the validity of a node recursively.
+func (n *node) check() (err error) {
+	if err = n.checkPriority(); err != nil {
+		return
+	}
+
+	if err = n.checkMaxParams(); err != nil {
+		return
+	}
+
+	if err = n.checkIndex(); err != nil {
+		return
+	}
+	return
 }
 
 // Check the priority of a node recursively.

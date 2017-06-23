@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"github.com/X-Plan/xgo/go-xrandstring"
+	"math/rand"
 	"net/http"
 	"strings"
 	"testing"
@@ -66,9 +67,7 @@ func TestAdd(t *testing.T) {
 			}
 		}
 		// 		n.print(0)
-		xassert.IsNil(t, n.checkPriority())
-		xassert.IsNil(t, n.checkMaxParams())
-		xassert.IsNil(t, n.checkIndex())
+		xassert.IsNil(t, n.check())
 	}
 }
 
@@ -126,6 +125,10 @@ func TestTSR(t *testing.T) {
 				// Must contain catch-all wildcard.
 				xassert.NotEqual(t, strings.IndexByte(p, '*'), -1)
 			} else {
+				if tsr != removeSlash {
+					n.print(0)
+					fmt.Println(path + "/")
+				}
 				xassert.Equal(t, tsr, removeSlash)
 			}
 		}
@@ -133,20 +136,67 @@ func TestTSR(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	var n = &node{}
+	var (
+		n         = &node{}
+		truePaths []string
+	)
+
+	for i := 0; i < 100; i++ {
+		truePaths = nil
+		for _, p := range paths {
+			if p.ok {
+				xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+				truePaths = append(truePaths, p.path)
+			}
+		}
+
+		randomSortPaths(truePaths)
+		for _, tp := range truePaths {
+			xassert.IsTrue(t, n.remove(tp))
+			fp, _ := generatePath(tp)
+			// The path parameter must match a existing path exactly.
+			xassert.IsFalse(t, n.remove(fp))
+			xassert.IsNil(t, n.check())
+		}
+
+		// Check the empty tree.
+		xassert.Equal(t, n.priority, uint32(0))
+		xassert.Equal(t, n.path, "")
+		xassert.IsFalse(t, n.remove("/"+xrandstring.Get(8)))
+	}
+}
+
+func TestAddAndRemove(t *testing.T) {
+	var truePaths []string
 	for _, p := range paths {
 		if p.ok {
-			xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+			truePaths = append(truePaths, p.path)
 		}
 	}
 
-	for _, p := range paths {
-		if p.ok {
-			xassert.IsTrue(t, n.remove(p.path))
-			xassert.IsNil(t, n.checkPriority())
-			xassert.IsNil(t, n.checkMaxParams())
-			xassert.IsNil(t, n.checkIndex())
-			// 			n.print(0)
+	for i := 0; i < 100; i++ {
+		randomSortPaths(truePaths)
+		for gap := 1; gap < len(truePaths); gap++ {
+			n1 := &node{}
+			for _, path := range truePaths {
+				xassert.IsNil(t, n1.add(path, path, generateHandle(path)))
+			}
+
+			for j := 0; j < gap; j++ {
+				xassert.IsTrue(t, n1.remove(truePaths[j]))
+			}
+
+			n2 := &node{}
+			for j := gap; j < len(truePaths); j++ {
+				path := truePaths[j]
+				xassert.IsNil(t, n2.add(path, path, generateHandle(path)))
+			}
+
+			if n1.Equal(n2) != nil {
+				n1.print(0)
+				n2.print(0)
+			}
+			xassert.IsNil(t, n1.Equal(n2))
 		}
 	}
 }
@@ -185,5 +235,14 @@ func generateHandle(path string) XHandle {
 		if w != nil {
 			w.Write([]byte(msg))
 		}
+	}
+}
+
+// Based on Fisher-Yates shuffle algorithm.
+func randomSortPaths(paths []string) {
+	var n = len(paths)
+	for i := 0; i < n-1; i++ {
+		j := rand.Int()%(n-i) + i
+		paths[i], paths[j] = paths[j], paths[i]
 	}
 }
