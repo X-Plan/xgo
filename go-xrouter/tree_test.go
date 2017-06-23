@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-16
+// Last Change: 2017-06-23
 package xrouter
 
 import (
@@ -128,6 +128,25 @@ func TestTSR(t *testing.T) {
 			} else {
 				xassert.Equal(t, tsr, removeSlash)
 			}
+		}
+	}
+}
+
+func TestRemove(t *testing.T) {
+	var n = &node{}
+	for _, p := range paths {
+		if p.ok {
+			xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+		}
+	}
+
+	for _, p := range paths {
+		if p.ok {
+			xassert.IsTrue(t, n.remove(p.path))
+			xassert.IsNil(t, n.checkPriority())
+			xassert.IsNil(t, n.checkMaxParams())
+			xassert.IsNil(t, n.checkIndex())
+			// 			n.print(0)
 		}
 	}
 }

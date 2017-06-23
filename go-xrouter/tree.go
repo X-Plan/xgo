@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-16
+// Last Change: 2017-06-23
 
 package xrouter
 
@@ -182,17 +182,24 @@ func (n *node) remove(path string) (ok bool) {
 			}
 		}
 
-		if k < len(n.children) && n.children[k].priority == 0 {
+		if k < len(n.children) {
 			if ok = n.children[k].remove(path[i:]); ok {
-				n.children = append(n.children[:i], n.children[i+1:]...)
+				if n.children[k].priority == 0 {
+					n.children = append(n.children[:k], n.children[k+1:]...)
+				}
 				n.priority--
 				n.setMaxParams()
+				n.resort()
 
 				if len(n.children) == 1 && n.handle == nil {
 					n.concat()
 				}
 			}
 		}
+	}
+
+	if n.priority == 0 {
+		n.path, n.index = "", byte(0)
 	}
 
 	return
