@@ -50,3 +50,25 @@ func TestXParams(t *testing.T) {
 	xps5 := append(xps1, XParam{"A", "B"})
 	xassert.IsFalse(t, xps1.Equal(xps5))
 }
+
+func TestSupportMethod(t *testing.T) {
+	var methodPair = []struct {
+		method string
+		ok     bool
+	}{
+		{"get", true},
+		{"pOst", true},
+		{"HEAD", true},
+		{"puT", true},
+		{"options", true},
+		{"PATCh", true},
+		{"DELETE", true},
+		{"CONNECT", false},
+		{"foo", false},
+		{"BAR", false},
+	}
+
+	for _, pair := range methodPair {
+		xassert.Equal(t, SupportMethod(pair.method), pair.ok)
+	}
+}
