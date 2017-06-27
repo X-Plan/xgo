@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-01-07
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-03-23
+// Last Change: 2017-06-27
 
 // go-xrandstring package contains some random operations about string.
 package xrandstring
@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-const Version = "1.1.0"
 const LetterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 const (
 	letterIdxBits = 6
@@ -56,4 +55,21 @@ func Replace(old string, str string) string {
 	} else {
 		return old
 	}
+}
+
+// Generate a random permutation from the original string. The basic
+// element of permutation is 'rune' type, not 'byte' type.
+func Perm(str string) string {
+	// The implemention is based on Fisher-Yates shuffle algorithm.
+	var (
+		rs     = []rune(str)
+		n, max = len(rs), len(rs) - 1
+	)
+
+	for i := 0; i < max; i++ {
+		j := int(src.Int63())%(n-i) + i
+		rs[i], rs[j] = rs[j], rs[i]
+	}
+
+	return string(rs)
 }

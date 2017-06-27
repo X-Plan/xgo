@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-01-07
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-08
+// Last Change: 2017-06-27
 package xrandstring
 
 import (
@@ -54,6 +54,25 @@ func TestReplace(t *testing.T) {
 		} else {
 			xassert.Equal(t, newstr, oldstr)
 		}
+	}
+}
+
+func TestPerm(t *testing.T) {
+	var strs = []string{
+		"",
+		"a",
+		"你",
+		"Who Are You?",
+		"Am I Alone?",
+		"你是谁?",
+		"我是一个人吗?",
+		"If today is my last day, what should I do? what I'm best to do?",
+	}
+
+	for _, str := range strs {
+		nstr := Perm(str)
+		xassert.Equal(t, len(str), len(nstr))
+		fmt.Println(nstr)
 	}
 }
 
