@@ -62,12 +62,12 @@ func Replace(old string, str string) string {
 func Perm(str string) string {
 	// The implemention is based on Fisher-Yates shuffle algorithm.
 	var (
-		rs     = []rune(str)
-		n, max = len(rs), len(rs) - 1
+		rs = []rune(str)
+		n  = len(rs)
 	)
 
-	for i := 0; i < max; i++ {
-		j := int(src.Int63())%(n-i) + i
+	for i := n - 1; i >= 0; i-- {
+		j := int(src.Int63()) % (i + 1)
 		rs[i], rs[j] = rs[j], rs[i]
 	}
 
