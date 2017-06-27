@@ -1,11 +1,11 @@
 // xassert.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2016-10-14
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-01-03
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2016-10-14
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-06-27
 
-// go-xassert是一个方便测试使用的断言包.
+// go-xassert is a assert package used to test.
 package xassert
 
 import (
@@ -16,31 +16,24 @@ import (
 	"runtime"
 )
 
-var (
-	Version = "1.2.2"
-)
-
-// 该接口的目的是为了统一
-// *testing.T和*testing.B,
-// 它是该库用到的最小功能
-// 集合.
+// This interface is used to unify '*testing.T' and '*testing.B' type.
 type XT interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	FailNow()
 }
 
-// 断言条件为真.
+// Assert the condition is true.
 func IsTrue(xt XT, result bool) {
 	assert(xt, result, func() { xt.Error("result is not true") }, 1)
 }
 
-// 断言条件为假.
+// Assert the condition is false.
 func IsFalse(xt XT, result bool) {
 	assert(xt, !result, func() { xt.Error("result is not false") }, 1)
 }
 
-// 断言实际值等于期望值.
+// Assert the actual value is equal to expected value.
 func Equal(xt XT, exp, act interface{}, args ...interface{}) {
 	result := reflect.DeepEqual(exp, act)
 	assert(xt, result, func() {
@@ -52,7 +45,7 @@ func Equal(xt XT, exp, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
-// 断言实际值不等于期望值.
+// Assert the actual value is not equal to expected value.
 func NotEqual(xt XT, exp, act interface{}, args ...interface{}) {
 	result := !reflect.DeepEqual(exp, act)
 	assert(xt, result, func() {
@@ -64,7 +57,7 @@ func NotEqual(xt XT, exp, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
-// 断言实际值为空.
+// Assert the actual value is nil.
 func IsNil(xt XT, act interface{}, args ...interface{}) {
 	result := isNil(act)
 	assert(xt, result, func() {
@@ -81,7 +74,7 @@ func IsNil(xt XT, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
-// 断言实际值不为空.
+// Assert the actual value is nil.
 func NotNil(xt XT, act interface{}, args ...interface{}) {
 	result := !isNil(act)
 	assert(xt, result, func() {
@@ -93,8 +86,7 @@ func NotNil(xt XT, act interface{}, args ...interface{}) {
 	}, 1)
 }
 
-// 正则表达式匹配. 用act的字符串格式和正则
-// 表达式匹配.
+// Assert the string format of the actual value is matched with pattern (regular expression).
 func Match(xt XT, act interface{}, pattern string, args ...interface{}) {
 	result := regexp.MustCompile(pattern).MatchString(fmt.Sprintf("%s", act))
 	assert(xt, result, func() {
@@ -106,6 +98,7 @@ func Match(xt XT, act interface{}, pattern string, args ...interface{}) {
 	}, 1)
 }
 
+// Assert the string format of the actual value is not matched with pattern (regular expression).
 func NotMatch(xt XT, act interface{}, pattern string, args ...interface{}) {
 	result := !regexp.MustCompile(pattern).MatchString(fmt.Sprintf("%s", act))
 	assert(xt, result, func() {

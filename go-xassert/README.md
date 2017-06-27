@@ -1,13 +1,12 @@
 # go-xassert
 
 ![Building](https://img.shields.io/badge/building-passing-green.svg)
-![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**go-xassert**实现了一个方便测试的断言包.
+**go-xassert** is a assert package used to test.
 
 
-## 例子
+## Usage
 
 ```go
 type foo struct {
@@ -36,14 +35,14 @@ func Test(t *testing.T) {
         }
     )
 
-    xassert.IsTrue(t, true)     // 成功
-    xassert.IsFalse(t, false)   // 成功
-    xassert.IsNil(t, a)         // 成功
-    xassert.NotNil(t, b)        // 成功
-    xassert.NotEqual(t, a, b)   // 成功
-    xassert.Equal(t, a, b)      // 失败
+    xassert.IsTrue(t, true)     // success
+    xassert.IsFalse(t, false)   // success
+    xassert.IsNil(t, a)         // success
+    xassert.NotNil(t, b)        // success
+    xassert.NotEqual(t, a, b)   // success
+    xassert.Equal(t, a, b)      // fail
 
-    // 正则匹配.
+    // regular expression match.
 	xassert.Match(t, errors.New("Hello World"), `[Hh]ello\s+[Ww]orld`)
 	xassert.NotMatch(t, errors.New("Are You OK?"), `You\s{2}`)
 }
