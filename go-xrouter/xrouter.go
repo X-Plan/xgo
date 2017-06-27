@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-14
+// Last Change: 2017-06-27
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -165,6 +165,7 @@ type XRouter struct {
 	// is designed to run safely in a concurrent environment,
 	// so the fields of XRouter can't be exported to user.
 	redirectTrailingSlash  bool
+	redirectFixedPath      bool
 	handleOptions          bool
 	handleMethodNotAllowed bool
 	notFound               http.Handler
@@ -181,6 +182,7 @@ func New(xcfg *XConfig) *XRouter {
 	xr := &XRouter{
 		trees: make(map[string]*tree),
 		redirectTrailingSlash:  xcfg.RedirectTrailingSlash,
+		redirectFixedPath:      xcfg.RedirectFixedPath,
 		handleOptions:          xcfg.HandleOptions,
 		handleMethodNotAllowed: xcfg.HandleMethodNotAllowed,
 		notFound:               xcfg.NotFound,
@@ -239,25 +241,68 @@ func (xr *XRouter) DELETE(path string, handle XHandle) error {
 }
 
 // Handle registers a new request handle with the given path and method.
+// The registered path, against which the router matches incoming requests,
+// can contain two types of parameters:
+//  Syntax      Type
+//  :name       named parameter
+//  *name       catch-all parameter
+//
+// Named parameters are dynamic path segments. They match anything until the
+// next '/' or the path end:
+//  Path: /blog/:category/:post
+//
+//  Requests:
+//   /blog/go/request-routers            match: category="go", post="request-routers"
+//   /blog/go/request-routers/           no match, but the router would redirect
+//   /blog/go/                           no match
+//   /blog/go/request-routers/comments   no match
+//
+// Catch-all parameters match anything until the path end, including the
+// directory index (the '/' before the catch-all). Since they match anything
+// until the end, catch-all parameters must always be the final path element.
+//  Path: /files/*filepath
+//
+//  Requests:
+//   /files/                             match: filepath="/"
+//   /files/LICENSE                      match: filepath="/LICENSE"
+//   /files/templates/article.html       match: filepath="/templates/article.html"
+//   /files                              no match, but the router would redirect
+//
+// The value of parameters is saved as a XParams, consisting each of a key and
+// a value. The XParams is passed to the Handle func as a third parameter.
+// There are two ways to retrieve the value of a parameter:
+//  1. By the name of the parameter
+//  user := xps.Get("user") // defined by :user or *user
+//
+//  2. By the index of the parameter.
+//  thirdKey    := xps[2].Key     // the name of the 3rd parameter
+//  thirdValue  := xps[2].Value   // the value of the 3rd parameter
+//
 func (xr *XRouter) Handle(method, path string, handle XHandle) error {
+	if len(path) == 0 || path[0] != '/' {
+		return fmt.Errorf("path ('%s') must begin with '/'", path)
+	}
+
 	t := xr.trees[strings.ToUpper(method)]
 	if t == nil {
 		return fmt.Errorf("http method (%s) is unsupported", method)
 	}
 
-	// Fixing the path before it's registered.
-	path = CleanPath(path)
 	return t.add(path, handle)
 }
 
 // Remove unregister a existing request handle with given path and method.
+// The path parameter must match a existing path exactly, It won't consider
+// wildcard and trailing slash. If the path '/foo/:bar/who/are/*you' has
+// been registered, we can't use the argument '/foo/:xxx/who/are/*ooo' to
+// remove it.
 func (xr *XRouter) Remove(method, path string) error {
 	t := xr.trees[strings.ToUpper(method)]
 	if t == nil {
 		return fmt.Errorf("http method (%s) is unsupported", method)
 	}
 
-	return t.remove(CleanPath(path))
+	return t.remove(path)
 }
 
 // ServeHTTP is the implementation of the http.Handler interface.
@@ -266,9 +311,11 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer xr.capturePanic(w, r)
 	}
 
-	path := r.URL.Path
+	path, hasFixed := r.URL.Path, false
 
 	if t := xr.trees[r.Method]; t != nil {
+
+	fixed:
 		// If the results of the t.isempty function equals to true,
 		// the t.get function will also return the nil handle.
 		if handle, xps, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil {
@@ -282,14 +329,21 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				code = 307
 			}
 
-			if xr.redirectTrailingSlash {
-				if tsr == addSlash {
-					r.URL.Path = path + "/"
-				} else if tsr == removeSlash {
-					r.URL.Path = path[:len(path)-1]
-				}
+			if xr.redirectTrailingSlash && tsr != notRedirect {
+				r.URL.Path = xr.redirectPath(path, tsr)
 				http.Redirect(w, r, r.URL.String(), code)
 				return
+			}
+
+			// Try to fix the request path. The 'hasFixed' variable can be
+			// ignored if don't consider performance, because the 'fixedPath'
+			// must equal to 'CleanPath(path)' on second time.
+			if xr.redirectFixedPath && !hasFixed {
+				fixedPath := CleanPath(path)
+				if fixedPath != path {
+					path, hasFixed = fixedPath, true
+					goto fixed
+				}
 			}
 		}
 	}
@@ -297,7 +351,7 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		if xr.handleOptions {
 			// Handle OPTIONS requests.
-			if allow := xr.allowed(path, r.Method); len(allow) > 0 {
+			if allow := xr.allowed(r.URL.Path, r.Method); len(allow) > 0 {
 				w.Header().Set("Allow", allow)
 				return
 			}
@@ -305,7 +359,7 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Handle 405.
 		if xr.handleMethodNotAllowed {
-			if allow := xr.allowed(path, r.Method); len(allow) > 0 {
+			if allow := xr.allowed(r.URL.Path, r.Method); len(allow) > 0 {
 				w.Header().Set("Allow", allow)
 				xr.methodNotAllowed.ServeHTTP(w, r)
 				return
@@ -351,6 +405,15 @@ func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
 		allow += ", OPTIONS"
 	}
 	return
+}
+
+func (xr *XRouter) redirectPath(path string, tsr tsrType) string {
+	if tsr == addSlash {
+		return path + "/"
+	} else if tsr == removeSlash {
+		return path[:len(path)-1]
+	}
+	return path
 }
 
 func (xr *XRouter) capturePanic(w http.ResponseWriter, r *http.Request) {
