@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-23
+// Last Change: 2017-06-27
 package xrouter
 
 import (
@@ -61,7 +61,7 @@ func TestAdd(t *testing.T) {
 	for _, p := range paths {
 		if err := n.add(p.path, p.path, generateHandle(p.path)); err != nil {
 			if !p.ok {
-				fmt.Println(err)
+				// 				fmt.Println(err)
 			} else {
 				xassert.IsNil(t, err)
 			}

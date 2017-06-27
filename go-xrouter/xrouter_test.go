@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-26
+// Last Change: 2017-06-27
 package xrouter
 
 import (
@@ -70,5 +70,32 @@ func TestSupportMethod(t *testing.T) {
 
 	for _, pair := range methodPair {
 		xassert.Equal(t, SupportMethod(pair.method), pair.ok)
+	}
+}
+
+func TestHandle(t *testing.T) {
+	var paths = []struct {
+		methods []string
+		path    string
+		ok      bool
+	}{
+		{[]string{"GET", "POST"}, "/hello/:world", true},
+		{[]string{"get"}, "/hello/:world", false},        // has been existing
+		{[]string{"post"}, "/hello/world", false},        // conflict
+		{[]string{"GET", "POST"}, "hello/:world", false}, // path doesn't begin with '/'
+		{[]string{"GET", "POST"}, "", false},             // path doesn't begin with '/'
+		{[]string{"PUT", "OPTIONS", "DELETE"}, "/hello/:world", true},
+		{[]string{"CONNECT"}, "/foo/bar", false}, // method is unsupported
+	}
+
+	xr := New(&XConfig{})
+	for _, p := range paths {
+		var err error
+		for _, method := range p.methods {
+			if err = xr.Handle(method, p.path, generateHandle(p.path)); err != nil {
+				break
+			}
+		}
+		xassert.Equal(t, err == nil, p.ok)
 	}
 }
