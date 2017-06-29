@@ -6,23 +6,23 @@
 **go-xlog** implement a concurrently safe rotate-log. It restricts the log volume    
 based on the following three dimensions.
 
-> - **Max Size**: The size of each log file reaches this value at most.
-> - **Max Backups**: The all log files of a logger instance will store in one directory,  
-the number of log files in it reaches this value at most. When reaches this thresold,   
-a new log file will replace a old log file to maintain the total number.
-> - **Max Age**: The file name of each log file is its create time, when the age of a   
-log file exceeds this thresold, it will be deleted.
+  - **Max Size**: The size of each log file reaches this value at most.
+  - **Max Backups**: All log files of a logger instance will store in one directory,  
+  the number of log files in it reaches this value at most. When reaches this threshold,   
+  a new log file will replace an old log file to maintain the total number.
+  - **Max Age**: The file name of each log file is its creation time, when the age of a   
+  log file exceeds this threshold, it will be deleted.
 
 ## Architecture
 
-**go-xlog** separates an user writes to `xlog` and `xlog` writes to the disk,  the    
-voker of `go-xlog` writes data to the **Buffer Channel**, then **flush go-routine** flushes     
+**go-xlog** separates a user writes to `xlog` and `xlog` writes to the disk,  the    
+invoker of `go-xlog` writes data to the **Buffer Channel**, then **flush go-routine** flushes     
 these data to the disk asynchronously.
 
 ![Architecture](img/architecture.png)
 
-because **invoker go-routine** and **flush go-routine** run indenpendently, so the errors occur in **flush go-routine**    
-are transited to **invoker go-routine** through the **Channel**,  user can capture these
+because **invoker go-routine** and **flush go-routine** run independently, so the errors occur in **flush go-routine**    
+are transited to **invoker go-routine** through the **Channel**,  a user can capture these
 errors when calls **Write** function.
 
 
