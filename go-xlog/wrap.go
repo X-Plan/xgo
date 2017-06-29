@@ -1,9 +1,9 @@
 // wrap.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2017-02-07
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-07
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2017-02-07
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-06-29
 
 package xlog
 

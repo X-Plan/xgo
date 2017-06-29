@@ -1,11 +1,10 @@
 // xlog_test.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2016-11-08
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-09
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2016-11-08
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-06-29
 
-// go-xlog的测试文件.
 package xlog
 
 import (
@@ -17,7 +16,6 @@ import (
 	"testing"
 )
 
-// 测试创建日志的合法性.
 func TestNew(t *testing.T) {
 	var (
 		err error
@@ -76,7 +74,7 @@ func TestNew(t *testing.T) {
 	xassert.NotNil(t, xl)
 	xassert.IsNil(t, err)
 
-	// 测试目录的重复创建.
+	// Test creating repeatedly.
 	tmpxl, err := New(xcfg)
 	xassert.IsNil(t, tmpxl)
 	xassert.NotNil(t, err)
@@ -99,9 +97,8 @@ func TestNew(t *testing.T) {
 	xassert.IsNil(t, os.Remove("./log2"))
 }
 
-// 测试写入函数的正确性, 测试方法采取
-// 10个协程并发写入, 最后应该确保每个
-// 协程写入的信息是完整的且局部保序.
+// Create ten routines to write a 'XLogger' instance concurrently,
+// the data written by a single routine should be complete.
 func TestWrite(t *testing.T) {
 	xcfg := &XConfig{
 		Dir:        "/tmp/xlog",
@@ -136,8 +133,7 @@ func writeUnitTest(t *testing.T, xcfg *XConfig) {
 	}
 
 	wg.Wait()
-	// 这里需要关闭, 确保内容已经被
-	// 持久化.
+	// Must close, ensure the data have been persisted.
 	xassert.IsNil(t, xl.Close())
 }
 

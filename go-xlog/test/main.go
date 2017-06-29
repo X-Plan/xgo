@@ -1,11 +1,11 @@
 // main.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2016-11-09
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2016-12-31
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2016-11-09
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-06-29
 
-// 一个用于测试go-xlog包的工具.
+// A tool used to test go-xlog.
 package main
 
 import (
