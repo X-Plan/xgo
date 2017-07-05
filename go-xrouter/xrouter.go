@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-27
+// Last Change: 2017-07-05
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -116,7 +116,7 @@ type XConfig struct {
 	// For example if /foo/ is requested but a route only exists for /foo, the
 	// client is redirected to /foo with http status code 301 for GET requests
 	// and 307 for all other request methods.
-	RedirectTrailingSlash bool
+	RedirectTrailingSlash bool `json:"rediect_trailing_slash" yaml:"rediect_trailing_slash"`
 
 	// If enabled, the router tries to fix the current request path, if no
 	// handle is registered for it.
@@ -127,18 +127,18 @@ type XConfig struct {
 	// all other request methods.
 	// For example /FOO and /..//Foo could be redirected to /foo.
 	// RedirectTrailingSlash is independent of this option.
-	RedirectFixedPath bool
+	RedirectFixedPath bool `json:"redirect_fixed_path" yaml:"redirect_fixed_path"`
 
 	// If enabled, the router will reply to OPTIONS requests, but
 	// the custom OPTIONS handlers has more priority than automatic replies.
-	HandleOptions bool
+	HandleOptions bool `json:"handle_options" yaml:"handle_options"`
 
 	// If the current request can't be routed, it will check whether another
 	// method is allowed for the current request when this option is enabled.
 	// If other method has router to handle this request, will invoke the
 	// MethodNotAllowed handler to response it, otherwise the request is
 	// delegated to the NotFound handler.
-	HandleMethodNotAllowed bool
+	HandleMethodNotAllowed bool `json:"handle_method_not_allowed" yaml:"handle_method_not_allowed"`
 
 	// When the request url path is not matching any register route, NotFound
 	// handler will be called, If it's not set, http.NotFound is used.
