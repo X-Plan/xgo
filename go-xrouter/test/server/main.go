@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-07-05
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-05
+// Last Change: 2017-07-06
 // Purpose: This program is used to test the validity of the
 // XRouter (server end).
 
@@ -14,8 +14,11 @@ import (
 	"flag"
 	"fmt"
 	"github.com/X-Plan/xgo/go-xrouter"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 )
 
 var (
@@ -29,8 +32,6 @@ var (
 )
 
 type config struct {
-	Port       string          `json:"port"`
-	AdminPort  string          `json:"admin_port"`
 	XRouter    xrouter.XConfig `json:"xrouter"`
 	Paths      []path          `json:"paths"`
 	PanicPaths []path          `json:"panic_paths"`
@@ -64,6 +65,8 @@ func main() {
 	}
 }
 
+var xr *xrouter.XRouter
+
 // Run http server.
 func run() error {
 	data, err := ioutil.ReadFile(*flagConfig)
@@ -76,21 +79,56 @@ func run() error {
 		return err
 	}
 
-	xr := xrouter.New(&cfg.XRouter)
+	cfg.XRouter.PanicHandler = func(w http.ResponseWriter, r *http.Request, x interface{}) {
+		w.WriteHeader(500)
+		w.Write([]byte(fmt.Sprintf("%s", x)))
+	}
+
+	xr = xrouter.New(&cfg.XRouter)
 	for _, p := range cfg.Paths {
-		if err := handle(xr, p.Method, p.Path, generateHandle(p)); err != nil {
-			return err
+		for _, method := range p.Methods {
+			if err := handle(xr, method, p.Path, generateHandle(method, p.Path)); err != nil {
+				return err
+			}
 		}
 	}
 
 	for _, p := range cfg.PanicPaths {
-		if err := handle(xr, p.Method, p.Path, generatePanicHandle(p)); err != nil {
-			return err
+		for _, method := range p.Methods {
+			if err := handle(xr, method, p.Path, generatePanicHandle(method, p.Path)); err != nil {
+				return err
+			}
 		}
 	}
+
+	// Run the HTTP server for the requests of the client.
+	s := &http.Server{
+		Addr:           ":" + *flagPort,
+		Handler:        xr,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	go s.ListenAndServe()
+
+	sm := http.NewServeMux()
+	sm.HandleFunc("/add", generateAdminHandle("add"))
+	sm.HandleFunc("/remove", generateAdminHandle("remove"))
+
+	// Run the HTTP server for the requests of the administrator.
+	as := &http.Server{
+		Addr:           ":" + *flagAdminPort,
+		Handler:        xr,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	as.ListenAndServe()
+
+	return nil
 }
 
-func handle(xr *XRouter, method, path string, handle XHandle) error {
+func handle(xr *xrouter.XRouter, method, path string, handle xrouter.XHandle) error {
 	// Using 'Handle' function directly will be better, but I use this
 	// 'handle' function to check the validity of the shortcut for 'Handle'.
 	switch method {
@@ -113,26 +151,28 @@ func handle(xr *XRouter, method, path string, handle XHandle) error {
 	}
 }
 
-func generateHandle(p path) {
-	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
-		w.Write(newResponse(p))
+func generateHandle(method, p string) xrouter.XHandle {
+	return func(w http.ResponseWriter, _ *http.Request, xps xrouter.XParams) {
+		w.Write(newResponse(method, p, xps))
 	}
 }
 
-func generatePanicHandle(p path) {
-	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
-		panic(string(newResponse(p)))
+func generatePanicHandle(method, p string) xrouter.XHandle {
+	return func(w http.ResponseWriter, _ *http.Request, xps xrouter.XParams) {
+		panic(string(newResponse(method, p, xps)))
 	}
 }
 
-func newResponse(p path) []byte {
-	var obj = struct {
-		Method  string `json:"method"`
-		Path    string `json:"path"`
-		XParams string `json:"xparams"`
-	}{
-		Method:  p.Method,
-		Path:    p.Path,
+type response struct {
+	Method  string `json:"method"`
+	Path    string `json:"path"`
+	XParams string `json:"xparams"`
+}
+
+func newResponse(method, p string, xps xrouter.XParams) []byte {
+	var obj = &response{
+		Method:  method,
+		Path:    p,
 		XParams: xps.String(),
 	}
 
@@ -140,16 +180,82 @@ func newResponse(p path) []byte {
 	return msg
 }
 
-func addHandle(w http.ResponseWriter, r *http.Request) {
+type adminRequest struct {
+	Methods []string `json:"methods"`
+	Path    string   `json:"path"`
 }
 
-func removeHandle(w http.ResponseWriter, r *http.Request) {
+type adminResponse struct {
+	Ret int    `json:"ret"`
+	Msg string `json:"msg"`
+}
+
+func generateAdminHandle(cmd string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var arsp = &adminResponse{}
+
+		defer func() {
+			if arsp.Ret == -1 {
+				w.WriteHeader(500)
+			} else if arsp.Ret == -2 {
+				w.WriteHeader(400)
+			}
+
+			data, _ := json.Marshal(arsp)
+			w.Write(data)
+		}()
+
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			arsp.Ret, arsp.Msg = -1, err.Error()
+			return
+		}
+
+		areq := &adminRequest{}
+		if err = json.Unmarshal(body, areq); err != nil {
+			arsp.Ret, arsp.Msg = -2, err.Error()
+			return
+		}
+
+		// If 'Methods' contains 'ALL', ignore other methods.
+		existAll := false
+		for _, method := range areq.Methods {
+			if strings.ToUpper(method) == "ALL" {
+				existAll = true
+				break
+			}
+		}
+
+		var methods []string
+		if existAll {
+			methods = []string{"GET", "POST", "HEAD", "PUT", "OPTIONS", "PATCH", "DELETE"}
+		} else {
+			methods = areq.Methods
+		}
+
+		for _, method := range methods {
+			if cmd == "add" {
+				err = handle(xr, method, areq.Path, generateHandle(method, areq.Path))
+			} else if cmd == "remove" {
+				err = xr.Remove(method, areq.Path)
+			}
+
+			if err != nil {
+				arsp.Ret, arsp.Msg = -2, err.Error()
+				return
+			}
+		}
+
+		return
+	}
 }
 
 // Adding a new path.
 func add() error {
+	return nil
 }
 
 // Removing an existing path.
 func remove() error {
+	return nil
 }
