@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-27
+// Last Change: 2017-07-07
 package xrouter
 
 import (
@@ -105,8 +105,6 @@ func TestTSR(t *testing.T) {
 			}
 		}
 	}
-
-	// 	n.print(0)
 
 	for _, p := range independentPaths {
 		path, as := generatePath(p)

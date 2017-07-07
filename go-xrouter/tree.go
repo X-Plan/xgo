@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-05-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-23
+// Last Change: 2017-07-07
 
 package xrouter
 
@@ -414,14 +414,17 @@ outer:
 			i = len(path)
 		}
 
-		if i < len(path) {
-			if child := n.child(path[i]); child != nil {
-				parent, n, path = n, child, path[i:]
-				continue
+		if n.nt == static && i == len(n.path) || n.nt != static {
+			if i < len(path) {
+				if child := n.child(path[i]); child != nil {
+					parent, n, path = n, child, path[i:]
+					continue
+				}
+			} else if n.handle != nil {
+				h = n.handle
 			}
-		} else if n.handle != nil && (n.nt == static && i == len(n.path) || n.nt != static) {
-			h = n.handle
 		}
+
 		break outer
 	}
 
@@ -438,9 +441,13 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 		case static:
 			if n.handle != nil && i == len(path) && i == len(n.path)-1 && n.path[i] == '/' {
 				return addSlash
+			} else if i == len(n.path) && n.existSlashChild() {
+				return addSlash
 			}
 		case param:
 			if n.handle != nil && n.path[len(n.path)-1] == '/' {
+				return addSlash
+			} else if n.existSlashChild() {
 				return addSlash
 			}
 		}
@@ -462,6 +469,15 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 		}
 	}
 	return notRedirect
+}
+
+func (n *node) existSlashChild() bool {
+	for _, c := range n.children {
+		if c.path == "/" && c.handle != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // Locate the approriate child node by index parameter.
