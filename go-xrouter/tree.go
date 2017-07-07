@@ -414,7 +414,7 @@ outer:
 			i = len(path)
 		}
 
-		if n.nt == static && i == len(n.path) || n.nt != static {
+		if n.nt != static || i == len(n.path) {
 			if i < len(path) {
 				if child := n.child(path[i]); child != nil {
 					parent, n, path = n, child, path[i:]
@@ -439,15 +439,13 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 	if len(path) == 0 || path[len(path)-1] != '/' {
 		switch n.nt {
 		case static:
-			if n.handle != nil && i == len(path) && i == len(n.path)-1 && n.path[i] == '/' {
-				return addSlash
-			} else if i == len(n.path) && n.existSlashChild() {
+			if n.handle != nil && i == len(path) && i == len(n.path)-1 && n.path[i] == '/' ||
+				i == len(n.path) && n.existSlashChild() {
 				return addSlash
 			}
 		case param:
-			if n.handle != nil && n.path[len(n.path)-1] == '/' {
-				return addSlash
-			} else if n.existSlashChild() {
+			if n.handle != nil && n.path[len(n.path)-1] == '/' ||
+				n.existSlashChild() {
 				return addSlash
 			}
 		}
