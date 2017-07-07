@@ -329,7 +329,7 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				code = 307
 			}
 
-			if xr.redirectTrailingSlash && tsr != notRedirect {
+			if xr.redirectTrailingSlash && tsr != notRedirect || handle != nil {
 				r.URL.Path = xr.redirectPath(path, tsr)
 				http.Redirect(w, r, r.URL.String(), code)
 				return

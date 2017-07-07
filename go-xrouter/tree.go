@@ -452,7 +452,7 @@ func (n *node) canTSR(parent *node, path string, i int) tsrType {
 	} else { // len(path) > 0 && path[len(path)-1] == '/'
 		switch n.nt {
 		case static:
-			if i < len(path) && path[i] == '/' {
+			if i < len(path) && i == len(path)-1 {
 				if (i == len(n.path) && n.handle != nil) ||
 					(i == 0 && parent != nil && parent.handle != nil) {
 					return removeSlash
