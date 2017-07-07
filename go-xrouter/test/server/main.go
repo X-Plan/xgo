@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-07-05
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-06
+// Last Change: 2017-07-07
 // Purpose: This program is used to test the validity of the
 // XRouter (server end).
 
