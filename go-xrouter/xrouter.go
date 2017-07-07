@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-05
+// Last Change: 2017-07-07
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -116,7 +116,7 @@ type XConfig struct {
 	// For example if /foo/ is requested but a route only exists for /foo, the
 	// client is redirected to /foo with http status code 301 for GET requests
 	// and 307 for all other request methods.
-	RedirectTrailingSlash bool `json:"rediect_trailing_slash" yaml:"rediect_trailing_slash"`
+	RedirectTrailingSlash bool `json:"redirect_trailing_slash" yaml:"redirect_trailing_slash"`
 
 	// If enabled, the router tries to fix the current request path, if no
 	// handle is registered for it.
@@ -318,7 +318,7 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fixed:
 		// If the results of the t.isempty function equals to true,
 		// the t.get function will also return the nil handle.
-		if handle, xps, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil {
+		if handle, xps, tsr := t.get(path, xr.redirectTrailingSlash); handle != nil && !hasFixed {
 			handle(w, r, xps)
 			return
 		} else if r.Method != "CONNECT" && path != "/" {
