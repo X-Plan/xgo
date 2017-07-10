@@ -3,13 +3,14 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-07-05
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-07
+// Last Change: 2017-07-10
 // Purpose: This program is used to test the validity of the
 // XRouter (server end).
 
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -28,7 +29,7 @@ var (
 	flagAdminPort = flag.String("admin-port", "9091", "http port listening for administrator")
 	flagCmd       = flag.String("cmd", "run", "command (run, add, remove)")
 	flagMethods   = flag.String("methods", "ALL", "http method, eg: GET,POST,DELETE. ALL represent all methods")
-	flagPattern   = flag.String("path", "", "path path, eg: /who/:are/*you")
+	flagPath      = flag.String("path", "", "path pattern, eg: /who/:are/*you")
 )
 
 type config struct {
@@ -51,9 +52,9 @@ func main() {
 	case "run":
 		err = run()
 	case "add":
-		err = add()
+		err = admin("add")
 	case "remove":
-		err = remove()
+		err = admin("remove")
 	default:
 		fmt.Fprintf(os.Stderr, "[ERROR]: Invalid command (%s)\n", *flagCmd)
 		os.Exit(1)
@@ -118,7 +119,7 @@ func run() error {
 	// Run the HTTP server for the requests of the administrator.
 	as := &http.Server{
 		Addr:           ":" + *flagAdminPort,
-		Handler:        xr,
+		Handler:        sm,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
@@ -233,6 +234,8 @@ func generateAdminHandle(cmd string) http.HandlerFunc {
 			methods = areq.Methods
 		}
 
+		var errs = make(map[string]error)
+
 		for _, method := range methods {
 			if cmd == "add" {
 				err = handle(xr, method, areq.Path, generateHandle(method, areq.Path))
@@ -241,21 +244,63 @@ func generateAdminHandle(cmd string) http.HandlerFunc {
 			}
 
 			if err != nil {
-				arsp.Ret, arsp.Msg = -2, err.Error()
-				return
+				errs[method] = err
 			}
+		}
+
+		if len(errs) > 0 {
+			err = nil
+			for method, e := range errs {
+				if err != nil {
+					err = fmt.Errorf("%s\n(%s) %s", err, method, e)
+				} else {
+					err = fmt.Errorf("(%s) %s", method, e)
+				}
+			}
+		}
+
+		if err != nil {
+			arsp.Ret, arsp.Msg = -2, err.Error()
 		}
 
 		return
 	}
 }
 
-// Adding a new path.
-func add() error {
+func admin(cmd string) error {
+	url := "http://" + *flagHost + ":" + *flagAdminPort + "/" + cmd
+	rsp, err := http.Post(url, "text/json", bytes.NewReader(flag2request()))
+	if err != nil {
+		return err
+	}
+
+	data, err := ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		return err
+	}
+
+	arsp := &adminResponse{}
+	if err = json.Unmarshal(data, arsp); err != nil {
+		return err
+	}
+
+	if arsp.Ret != 0 {
+		return fmt.Errorf("%s", arsp.Msg)
+	}
+
 	return nil
 }
 
-// Removing an existing path.
-func remove() error {
-	return nil
+func flag2request() []byte {
+	areq := &adminRequest{
+		Methods: strings.Split(*flagMethods, ","),
+		Path:    *flagPath,
+	}
+
+	for i := 0; i < len(areq.Methods); i++ {
+		areq.Methods[i] = strings.TrimSpace(areq.Methods[i])
+	}
+
+	data, _ := json.Marshal(areq)
+	return data
 }
