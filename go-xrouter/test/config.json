@@ -1,0 +1,22 @@
+{
+    "xrouter": {
+        "redirect_trailing_slash": true,
+        "redirect_fixed_path": true,
+        "handle_options": true,
+        "handle_method_not_allowed": true
+    },
+    "paths":[
+        { "methods": ["GET", "POST"], "path": "/get/user/:name" },
+        { "methods": ["GET", "POST", "DELETE"], "path": "/add/user/*info"},
+        { "methods": ["PATCH"], "path": "/ping" },
+        { "methods": ["GET", "POST"], "path": "/hello/world/" },
+        { "methods": ["PUT"], "path": "/hello/world" },
+        { "methods": ["DELETE", "PATCH"], "path": "/who/are/:you/my/:name/is/*nil" },
+        { "methods": ["HEAD"], "path": "/get/so:me/thing" },
+        { "methods": ["OPTIONS"], "path": "/Am/I/alone" }
+    ],
+    "panic_paths": [
+        { "methods": ["GET"], "path": "/panic/get" },
+        { "methods": ["POST"], "path": "/post/:panic"}
+    ]
+}

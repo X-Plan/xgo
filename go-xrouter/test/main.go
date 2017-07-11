@@ -3,9 +3,9 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-07-05
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-10
+// Last Change: 2017-07-11
 // Purpose: This program is used to test the validity of the
-// XRouter (server end).
+// XRouter.
 
 package main
 
