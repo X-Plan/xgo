@@ -13,6 +13,9 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -113,13 +116,30 @@ func TestPanic(t *testing.T) {
 		},
 	})
 
-	method, path := "GET", "/I/am/panic"
-	xassert.IsNil(t, handle(xr, method, path, generatePanicHandle(method, path)))
+	paths := []struct {
+		methods []string
+		path    string
+	}{
+		{[]string{"GET", "POST"}, "/I/am/panic"},
+		{[]string{"PUT", "DELETE"}, "/hello/:world"},
+		{[]string{"GET"}, "/who/a:re/*you"},
+	}
+
+	for _, p := range paths {
+		for _, method := range p.methods {
+			xassert.IsNil(t, handle(xr, method, p.path, generatePanicHandle(method, p.path)))
+		}
+	}
 	l, port, err := runServer(xr)
 	xassert.IsNil(t, err)
 	defer l.Close()
-	path, xps := generatePath(path)
-	xassert.IsNil(t, roundtrip(port, method, path, xps, 500, check200_and_500(method, path, xps)))
+
+	for _, p := range paths {
+		path, xps := generatePath(p.path)
+		for _, method := range p.methods {
+			xassert.IsNil(t, roundtrip(port, method, path, xps, 500, check200_and_500(method, path, xps)))
+		}
+	}
 }
 
 func runServer(xr *XRouter) (l net.Listener, port string, err error) {
@@ -200,14 +220,20 @@ func check301_and_307(redirectPath string) checkFunc {
 	}
 }
 
-// Handle a path on multiple methods.
-func mhandle(xr *XRouter, methods []string, path string, h XHandle) (err error) {
-	for _, method := range methods {
-		if err = handle(xr, method, path, h); err != nil {
-			return
+func check404(*http.Response) error {
+	return nil
+}
+
+func check405(allowed []string) checkFunc {
+	return func(rsp *http.Response) error {
+		allowHeader := strings.Split(rsp.Header.Get("Allow"), ", ")
+		sort.Strings(allowed)
+		sort.Strings(allowHeader)
+		if !reflect.DeepEqual(allowed, allowHeader) {
+			return fmt.Errorf("response Allow (%s) and expected Allow (%s) don't match", rsp.Header.Get("Allow"), strings.Join(allowed, ", "))
 		}
+		return nil
 	}
-	return
 }
 
 // Using 'Handle' function directly will be better, but I use this
