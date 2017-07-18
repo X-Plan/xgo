@@ -10,8 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"io/ioutil"
+	"net"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestXParam(t *testing.T) {
@@ -99,6 +102,101 @@ func TestHandle(t *testing.T) {
 			}
 		}
 		xassert.Equal(t, err == nil, p.ok)
+	}
+}
+
+func TestPanic(t *testing.T) {
+	xr := New(&XConfig{
+		PanicHandler: func(w http.ResponseWriter, r *http.Request, x interface{}) {
+			w.WriteHeader(500)
+			w.Write([]byte(fmt.Sprintf("%s", x)))
+		},
+	})
+
+	method, path := "GET", "/I/am/panic"
+	xassert.IsNil(t, handle(xr, method, path, generatePanicHandle(method, path)))
+	l, port, err := runServer(xr)
+	xassert.IsNil(t, err)
+	defer l.Close()
+	path, xps := generatePath(path)
+	xassert.IsNil(t, roundtrip(port, method, path, xps, 500, check200_and_500(method, path, xps)))
+}
+
+func runServer(xr *XRouter) (l net.Listener, port string, err error) {
+	if l, err = net.Listen("tcp", "0.0.0.0:0"); err != nil {
+		return
+	}
+	_, port, _ = net.SplitHostPort(l.Addr().String())
+
+	s := &http.Server{
+		Handler:        xr,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	go s.Serve(l)
+	return
+}
+
+type checkFunc func(*http.Response) error
+
+func roundtrip(port, method, path string, xps XParams, code int, check checkFunc) error {
+	req, err := http.NewRequest(method, "http://127.0.0.1:"+port+path, nil)
+	if err != nil {
+		return err
+	}
+
+	rsp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return err
+	}
+
+	if rsp.StatusCode != code {
+		return fmt.Errorf("response status code (%d) is not equal to expected status code (%d)", rsp.StatusCode, code)
+	}
+
+	return check(rsp)
+}
+
+func check200_and_500(method, path string, xps XParams) checkFunc {
+	return func(rsp *http.Response) error {
+		body, err := ioutil.ReadAll(rsp.Body)
+		if err != nil {
+			return err
+		}
+
+		pkg := &response{}
+		if err = json.Unmarshal(body, pkg); err != nil {
+			return err
+		}
+
+		if pkg.Method != method {
+			return fmt.Errorf("response method (%s) is not equal to expected method (%s)", pkg.Method, method)
+		}
+
+		if len(xps) == 0 {
+			// static path.
+			if pkg.Path != path {
+				return fmt.Errorf("response path (%s) is not equal to expected path (%s)", pkg.Path, path)
+			}
+		} else {
+			// param path.
+			if pkg.XParams != xps.String() {
+				return fmt.Errorf("response params (%s) is not equal to expected params (%s)", pkg.XParams, xps)
+			}
+		}
+
+		return nil
+	}
+}
+
+func check301_and_307(redirectPath string) checkFunc {
+	return func(rsp *http.Response) error {
+		if rsp.Header.Get("Location") != redirectPath {
+			return fmt.Errorf("response location (%s) is not equal to expected path (%s)", rsp.Header.Get("Location"), redirectPath)
+		}
+		return nil
 	}
 }
 
