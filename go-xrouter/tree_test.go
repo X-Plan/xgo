@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-07
+// Last Change: 2017-07-18
 package xrouter
 
 import (
@@ -11,7 +11,6 @@ import (
 	"github.com/X-Plan/xgo/go-xassert"
 	"github.com/X-Plan/xgo/go-xrandstring"
 	"math/rand"
-	"net/http"
 	"strings"
 	"testing"
 )
@@ -59,7 +58,7 @@ var paths = []struct {
 func TestAdd(t *testing.T) {
 	var n = &node{}
 	for _, p := range paths {
-		if err := n.add(p.path, p.path, generateHandle(p.path)); err != nil {
+		if err := n.add(p.path, p.path, generateHandle("GET", p.path)); err != nil {
 			if !p.ok {
 				// 				fmt.Println(err)
 			} else {
@@ -75,7 +74,7 @@ func TestGet(t *testing.T) {
 	var n = &node{}
 	for _, p := range paths {
 		if p.ok {
-			xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+			xassert.IsNil(t, n.add(p.path, p.path, generateHandle("GET", p.path)))
 		}
 	}
 
@@ -100,7 +99,7 @@ func TestTSR(t *testing.T) {
 	for _, p := range paths {
 		if p.ok {
 			if h, _, tsr := n.get(p.path, true); h == nil && tsr == notRedirect {
-				xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+				xassert.IsNil(t, n.add(p.path, p.path, generateHandle("GET", p.path)))
 				independentPaths = append(independentPaths, p.path)
 			}
 		}
@@ -143,7 +142,7 @@ func TestRemove(t *testing.T) {
 		truePaths = nil
 		for _, p := range paths {
 			if p.ok {
-				xassert.IsNil(t, n.add(p.path, p.path, generateHandle(p.path)))
+				xassert.IsNil(t, n.add(p.path, p.path, generateHandle("GET", p.path)))
 				truePaths = append(truePaths, p.path)
 			}
 		}
@@ -177,7 +176,7 @@ func TestAddAndRemove(t *testing.T) {
 		for gap := 1; gap < len(truePaths); gap++ {
 			n1 := &node{}
 			for _, path := range truePaths {
-				xassert.IsNil(t, n1.add(path, path, generateHandle(path)))
+				xassert.IsNil(t, n1.add(path, path, generateHandle("GET", path)))
 			}
 
 			for j := 0; j < gap; j++ {
@@ -187,7 +186,7 @@ func TestAddAndRemove(t *testing.T) {
 			n2 := &node{}
 			for j := gap; j < len(truePaths); j++ {
 				path := truePaths[j]
-				xassert.IsNil(t, n2.add(path, path, generateHandle(path)))
+				xassert.IsNil(t, n2.add(path, path, generateHandle("GET", path)))
 			}
 
 			if n1.Equal(n2) != nil {
@@ -226,15 +225,15 @@ func generatePath(pattern string) (path string, xps XParams) {
 	return
 }
 
-func generateHandle(path string) XHandle {
-	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
-		msg := fmt.Sprintf("path: %s, params: %s", path, xps)
-		fmt.Println(msg)
-		if w != nil {
-			w.Write([]byte(msg))
-		}
-	}
-}
+// func generateHandle("GET",path string) XHandle {
+// 	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
+// 		msg := fmt.Sprintf("path: %s, params: %s", path, xps)
+// 		fmt.Println(msg)
+// 		if w != nil {
+// 			w.Write([]byte(msg))
+// 		}
+// 	}
+// }
 
 // Based on Fisher-Yates shuffle algorithm.
 func randomSortPaths(paths []string) {

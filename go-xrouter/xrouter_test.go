@@ -3,12 +3,14 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-27
+// Last Change: 2017-07-18
 package xrouter
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
+	"net/http"
 	"testing"
 )
 
@@ -92,10 +94,72 @@ func TestHandle(t *testing.T) {
 	for _, p := range paths {
 		var err error
 		for _, method := range p.methods {
-			if err = xr.Handle(method, p.path, generateHandle(p.path)); err != nil {
+			if err = xr.Handle(method, p.path, generateHandle(method, p.path)); err != nil {
 				break
 			}
 		}
 		xassert.Equal(t, err == nil, p.ok)
+	}
+}
+
+// Handle a path on multiple methods.
+func mhandle(xr *XRouter, methods []string, path string, h XHandle) (err error) {
+	for _, method := range methods {
+		if err = handle(xr, method, path, h); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// Using 'Handle' function directly will be better, but I use this
+// 'handle' function to check the validity of the shortcut for 'Handle'.
+func handle(xr *XRouter, method, path string, h XHandle) error {
+	switch method {
+	case "GET":
+		return xr.GET(path, h)
+	case "POST":
+		return xr.POST(path, h)
+	case "HEAD":
+		return xr.HEAD(path, h)
+	case "PUT":
+		return xr.PUT(path, h)
+	case "OPTIONS":
+		return xr.OPTIONS(path, h)
+	case "PATCH":
+		return xr.PATCH(path, h)
+	case "DELETE":
+		return xr.DELETE(path, h)
+	default:
+		return xr.Handle(method, path, h)
+	}
+}
+
+type response struct {
+	Method  string `json:"method"`
+	Path    string `json:"path"`
+	XParams string `json:"xparams"`
+}
+
+func newResponse(method, p string, xps XParams) []byte {
+	var obj = &response{
+		Method:  method,
+		Path:    p,
+		XParams: xps.String(),
+	}
+
+	msg, _ := json.Marshal(obj)
+	return msg
+}
+
+func generateHandle(method, p string) XHandle {
+	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
+		w.Write(newResponse(method, p, xps))
+	}
+}
+
+func generatePanicHandle(method, p string) XHandle {
+	return func(w http.ResponseWriter, _ *http.Request, xps XParams) {
+		panic(string(newResponse(method, p, xps)))
 	}
 }
