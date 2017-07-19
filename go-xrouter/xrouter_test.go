@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-18
+// Last Change: 2017-07-19
 package xrouter
 
 import (
@@ -116,30 +116,75 @@ func TestPanic(t *testing.T) {
 		},
 	})
 
-	paths := []struct {
-		methods []string
-		path    string
-	}{
-		{[]string{"GET", "POST"}, "/I/am/panic"},
-		{[]string{"PUT", "DELETE"}, "/hello/:world"},
-		{[]string{"GET"}, "/who/a:re/*you"},
+	paths := []pathType{
+		{[]string{"GET", "POST"}, "/I/am/panic", nil},
+		{[]string{"PUT", "DELETE"}, "/hello/:world", nil},
+		{[]string{"GET"}, "/who/a:re/*you", nil},
 	}
+	xassert.IsNil(t, configureXRouter(xr, paths, generatePanicHandle))
 
-	for _, p := range paths {
-		for _, method := range p.methods {
-			xassert.IsNil(t, handle(xr, method, p.path, generatePanicHandle(method, p.path)))
-		}
-	}
 	l, port, err := runServer(xr)
 	xassert.IsNil(t, err)
 	defer l.Close()
 
 	for _, p := range paths {
-		path, xps := generatePath(p.path)
 		for _, method := range p.methods {
+			path, xps := generatePath(p.path)
 			xassert.IsNil(t, roundtrip(port, method, path, xps, 500, check200_and_500(method, path, xps)))
 		}
 	}
+}
+
+func TestRedirectTrailingSlash(t *testing.T) {
+	xr := New(&XConfig{RedirectTrailingSlash: true})
+	paths := []pathType{
+		{[]string{"GET", "POST"}, "/get/user/info", addSlash},
+		{[]string{"GET", "POST"}, "/get/user/foo/", removeSlash},
+		{[]string{"PUT"}, "/admin/add/:user/", removeSlash},
+		{[]string{"DELETE"}, "/admin/del/:user", addSlash},
+	}
+	xassert.IsNil(t, configureXRouter(xr, paths, generateHandle))
+
+	l, port, err := runServer(xr)
+	xassert.IsNil(t, err)
+	defer l.Close()
+
+	for _, p := range paths {
+		for _, method := range p.methods {
+			path, xps := generatePath(p.path)
+			code := 301
+			if method != "GET" {
+				code = 307
+			}
+
+			redirectPath := path
+			if p.ext.(tsrType) == removeSlash {
+				path = path[:len(path)-1]
+			} else if p.ext.(tsrType) == addSlash {
+				path += "/"
+			}
+
+			xassert.IsNil(t, roundtrip(port, method, path, xps, code, check301_and_307(redirectPath)))
+		}
+	}
+}
+
+type pathType struct {
+	methods []string
+	path    string
+	ext     interface{}
+}
+
+func configureXRouter(xr *XRouter, paths []pathType, generate func(string, string) XHandle) (err error) {
+	for _, p := range paths {
+		for _, method := range p.methods {
+			if err = handle(xr, method, p.path, generate(method, p.path)); err != nil {
+				return
+			}
+		}
+	}
+
+	return
 }
 
 func runServer(xr *XRouter) (l net.Listener, port string, err error) {
@@ -167,7 +212,11 @@ func roundtrip(port, method, path string, xps XParams, code int, check checkFunc
 		return err
 	}
 
-	rsp, err := (&http.Client{}).Do(req)
+	rsp, err := (&http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}).Do(req)
 	if err != nil {
 		return err
 	}
