@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-01-07
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-27
+// Last Change: 2017-07-21
 package xrandstring
 
 import (
@@ -16,7 +16,11 @@ import (
 // Compute the collision rate of 'Get' function.
 func TestCollisionRate(t *testing.T) {
 	for length := 1; length <= 8; length++ {
-		for n := 1000; n <= 10000; n += 1000 {
+		for n := 1000; n < 10000; n += 1000 {
+			fmt.Printf("n=%d length=%d collision rate=%.3v\n", n, length, collisionRate(n, length))
+		}
+
+		for n := 10000; n <= 100000; n += 10000 {
 			fmt.Printf("n=%d length=%d collision rate=%.3v\n", n, length, collisionRate(n, length))
 		}
 	}
