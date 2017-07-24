@@ -204,10 +204,60 @@ func TestRedirectFixedPath(t *testing.T) {
 	}
 }
 
+func TestHandleMethodNotAllowed(t *testing.T) {
+	xr := New(&XConfig{HandleMethodNotAllowed: true})
+	paths := []pathType{
+		{[]string{"GET", "POST", "PATCH", "OPTIONS"}, "/hello/world", nil},
+		{[]string{"PUT", "GET", "POST"}, "/get/user/:info", nil},
+		{[]string{"HEAD", "DELETE", "POST", "OPTIONS"}, "/add/user/*info", nil},
+		{[]string{"HEAD", "GET", "DELETE"}, "/what/:you/want/for/:me", nil},
+		{[]string{"GET", "DELETE"}, "/I/want/to/:go/*home", nil},
+		{[]string{"PUT", "POST"}, "/dont/:give/up/", nil},
+		{[]string{"OPTIONS"}, "/collect/user/:information/", nil},
+		{[]string{"HEAD", "OPTIONS"}, "/get/out/", nil},
+	}
+	xassert.IsNil(t, configureXRouter(xr, paths, generateHandle))
+
+	l, port, err := runServer(xr)
+	xassert.IsNil(t, err)
+	defer l.Close()
+
+	for _, p := range paths {
+		ms := diffMethods(methods, p.methods)
+		for _, method := range ms {
+			if method == "OPTIONS" {
+				continue
+			}
+			path, xps := generatePath(p.path)
+			allowed := append(diffMethods(p.methods, []string{"OPTIONS"}), "OPTIONS")
+			xassert.IsNil(t, roundtrip(port, method, path, xps, 405, check405(allowed)))
+		}
+	}
+}
+
 type pathType struct {
 	methods []string
 	path    string
 	ext     interface{}
+}
+
+func diffMethods(a, b []string) []string {
+	var c []string
+	for _, am := range a {
+		var exist bool
+		for _, bm := range b {
+			if am == bm {
+				exist = true
+				break
+			}
+		}
+
+		if !exist {
+			c = append(c, am)
+		}
+	}
+
+	return c
 }
 
 func configureXRouter(xr *XRouter, paths []pathType, generate func(string, string) XHandle) (err error) {

@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-07
+// Last Change: 2017-07-24
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -372,6 +372,8 @@ func (xr *XRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
+	var optionsAllowed bool
+
 	if path == "*" && reqMethod == "OPTIONS" {
 		for method, t := range xr.trees {
 			if method == "OPTIONS" || t.isempty() {
@@ -387,7 +389,7 @@ func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
 		}
 	} else {
 		for method, t := range xr.trees {
-			if method == reqMethod || method == "OPTIONS" || t.isempty() {
+			if method == reqMethod || t.isempty() {
 				continue
 			}
 
@@ -397,11 +399,15 @@ func (xr *XRouter) allowed(path, reqMethod string) (allow string) {
 				} else {
 					allow += ", " + method
 				}
+
+				if method == "OPTIONS" {
+					optionsAllowed = true
+				}
 			}
 		}
 	}
 
-	if len(allow) > 0 {
+	if len(allow) > 0 && !optionsAllowed {
 		allow += ", OPTIONS"
 	}
 	return
