@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-01-07
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-27
+// Last Change: 2017-07-24
 
 // go-xrandstring package contains some random operations about string.
 package xrandstring
@@ -20,14 +20,16 @@ const (
 	letterIdxMax  = 63 / letterIdxBits
 )
 
-var src = rand.NewSource(time.Now().UnixNano())
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // Generate a random string of length n, its character set is 'LetterBytes'.
 func Get(n int) string {
 	b := make([]byte, n)
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+	for i, cache, remain := n-1, rand.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
+			cache, remain = rand.Int63(), letterIdxMax
 		}
 		if idx := int(cache & letterIdxMask); idx < len(LetterBytes) {
 			b[i] = LetterBytes[idx]
@@ -45,11 +47,11 @@ func Get(n int) string {
 // is less than the 'str' or str is empty, directly return old string.
 func Replace(old string, str string) string {
 	if len(str) > 0 && len(str) < len(old) {
-		i := int(src.Int63()) % (len(old) - len(str) + 1)
+		i := int(rand.Int63()) % (len(old) - len(str) + 1)
 		return old[:i] + str + old[i+len(str):]
 	} else if len(str) == len(old) {
 		// If both 'old' and 'str' are empty, return 'str' is
-		// equal to return 'old' effectively. But I don't known
+		// equal to return 'old' effectively. But I don't know
 		// who will do that, it's too strange.
 		return str
 	} else {
@@ -67,7 +69,7 @@ func Perm(str string) string {
 	)
 
 	for i := n - 1; i >= 0; i-- {
-		j := int(src.Int63()) % (i + 1)
+		j := int(rand.Int63()) % (i + 1)
 		rs[i], rs[j] = rs[j], rs[i]
 	}
 
