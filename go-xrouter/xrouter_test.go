@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-19
+// Last Change: 2017-07-24
 package xrouter
 
 import (
@@ -162,6 +162,41 @@ func TestRedirectTrailingSlash(t *testing.T) {
 				path = path[:len(path)-1]
 			} else if p.ext.(tsrType) == addSlash {
 				path += "/"
+			}
+
+			xassert.IsNil(t, roundtrip(port, method, path, xps, code, check301_and_307(redirectPath)))
+		}
+	}
+}
+
+func TestRedirectFixedPath(t *testing.T) {
+	xr := New(&XConfig{RedirectFixedPath: true})
+	paths := []pathType{
+		{[]string{"GET"}, "/get/user/info", "/get////user/info"},
+		{[]string{"POST", "PUT"}, "/hello/:world/", "/../../////hello///:world///"},
+		{[]string{"GET", "DELETE"}, "/who/are/", "/who/are/./"},
+		{[]string{"GET", "DELETE"}, "/who", "/who/are/.."},
+		{[]string{"GET", "DELETE"}, "/who/", "/who/are/../"},
+		{[]string{"POST", "PATCH"}, "/what/you/*want", "/what/./you/foo/../*want"},
+		{[]string{"DELETE", "POST"}, "/for/:yourself/", "/../for/bar/.././:yourself////"},
+	}
+	xassert.IsNil(t, configureXRouter(xr, paths, generateHandle))
+
+	l, port, err := runServer(xr)
+	xassert.IsNil(t, err)
+	defer l.Close()
+
+	for _, p := range paths {
+		for _, method := range p.methods {
+			redirectPath, xps := generatePath(p.path)
+			code := 301
+			if method != "GET" {
+				code = 307
+			}
+
+			path := p.ext.(string)
+			for _, xp := range xps {
+				path = strings.Replace(strings.Replace(path, ":"+xp.Key, xp.Value, -1), "*"+xp.Key, xp.Value, -1)
 			}
 
 			xassert.IsNil(t, roundtrip(port, method, path, xps, code, check301_and_307(redirectPath)))
