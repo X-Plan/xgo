@@ -235,6 +235,33 @@ func TestHandleMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestHandleOptions(t *testing.T) {
+	xr := New(&XConfig{HandleOptions: true})
+	paths := []pathType{
+		{[]string{"GET", "POST"}, "/a/b/c", false},
+		{[]string{"GET", "POST", "PUT"}, "/get/user/:information", false},
+		{[]string{"POST", "DELETE"}, "/what/are/*you", false},
+		{[]string{"OPTIONS"}, "/what/:you/want/for/*me", true},
+		{[]string{"OPTIONS"}, "/hello/:world/", true},
+	}
+	xassert.IsNil(t, configureXRouter(xr, paths, generateHandle))
+
+	l, port, err := runServer(xr)
+	xassert.IsNil(t, err)
+	defer l.Close()
+
+	for _, p := range paths {
+		method := "OPTIONS"
+		path, xps := generatePath(p.path)
+		if p.ext.(bool) {
+			xassert.IsNil(t, roundtrip(port, method, path, xps, 200, check200_and_500(method, path, xps)))
+		} else {
+			allowed := append(diffMethods(p.methods, []string{"OPTIONS"}), "OPTIONS")
+			xassert.IsNil(t, roundtrip(port, method, path, xps, 200, check405(allowed)))
+		}
+	}
+}
+
 type pathType struct {
 	methods []string
 	path    string
