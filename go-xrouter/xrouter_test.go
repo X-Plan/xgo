@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-06-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-24
+// Last Change: 2017-07-25
 package xrouter
 
 import (
@@ -258,6 +258,78 @@ func TestHandleOptions(t *testing.T) {
 		} else {
 			allowed := append(diffMethods(p.methods, []string{"OPTIONS"}), "OPTIONS")
 			xassert.IsNil(t, roundtrip(port, method, path, xps, 200, check405(allowed)))
+		}
+	}
+}
+
+func TestAll(t *testing.T) {
+	xr := New(&XConfig{
+		RedirectTrailingSlash:  true,
+		RedirectFixedPath:      true,
+		HandleOptions:          true,
+		HandleMethodNotAllowed: true,
+	})
+	paths := []pathType{
+		{[]string{"GET", "POST"}, "/authorizations", nil},
+		{[]string{"GET", "DELETE"}, "/authorizations/:id", nil},
+		{[]string{"GET", "DELETE"}, "/applications/:client_id/tokens/:access_token", nil},
+		{[]string{"DELETE"}, "/applications/:client_id/tokens", nil},
+		{[]string{"GET"}, "/events", nil},
+		{[]string{"GET"}, "/repos/:owner/:repo/events", nil},
+		{[]string{"GET"}, "/networks/:owner/:repo/events", nil},
+		{[]string{"POST"}, "/orgs/:org/events", nil},
+		{[]string{"GET"}, "/users/:user/received_events", nil},
+		{[]string{"GET"}, "/users/:user/received_events/public", nil},
+		{[]string{"GET"}, "/users/:user/events", nil},
+		{[]string{"GET"}, "/users/:user/events/public", nil},
+		{[]string{"GET"}, "/users/:user/events/orgs/:org", nil},
+		{[]string{"GET"}, "/feeds", nil},
+		{[]string{"GET"}, "/notifications", nil},
+		{[]string{"GET", "PUT"}, "/repos/:owner/:repo/notifications/", nil},
+		{[]string{"PUT"}, "/notifications", nil},
+		{[]string{"OPTIONS"}, "/notifications/threads/*id", nil},
+	}
+	xassert.IsNil(t, configureXRouter(xr, paths, generateHandle))
+
+	l, port, err := runServer(xr)
+	xassert.IsNil(t, err)
+	defer l.Close()
+
+	requestPaths := []pathType{
+		{[]string{"GET", "DELETE"}, "/authorizations/123456", XParams{{"id", "123456"}}},
+		{[]string{"GET", "DELETE"}, "/applications/123456/tokens/123456", XParams{{"client_id", "123456"}, {"access_token", "123456"}}},
+		{[]string{"DELETE"}, "/applications/123456/tokens", XParams{{"client_id", "123456"}}},
+		{[]string{"OPTIONS"}, "/notifications/threads/123456", XParams{{"id", "123456"}}},
+		{[]string{"OPTIONS"}, "/authorizations", []string{"GET", "POST", "OPTIONS"}},
+		{[]string{"GET"}, "/events/", "/events"},
+		{[]string{"GET"}, "/users/blinklv/events/public/", "/users/blinklv/events/public"},
+		{[]string{"GET", "PUT"}, "/repos/blinklv/go-xrouter/notifications", "/repos/blinklv/go-xrouter/notifications/"},
+		{[]string{"GET"}, "/users/blinklv/events/public/.//////", "/users/blinklv/events/public"},
+		{[]string{"POST"}, "/../../orgs/X-Plan/.////events///", "/orgs/X-Plan/events"},
+		{[]string{"POST"}, "/feeds/", []string{"GET", "OPTIONS"}},
+		{[]string{"DELETE"}, "/notifications/threads/123456", []string{"OPTIONS"}},
+		{[]string{"POST"}, "/applications/123456/tokens/123456", []string{"GET", "DELETE", "OPTIONS"}},
+	}
+
+	for _, rpath := range requestPaths {
+		path := rpath.path
+		for _, method := range rpath.methods {
+			switch ext := rpath.ext.(type) {
+			case XParams:
+				xassert.IsNil(t, roundtrip(port, method, path, ext, 200, check200_and_500(method, path, ext)))
+			case string:
+				code := 301
+				if method != "GET" {
+					code = 307
+				}
+				xassert.IsNil(t, roundtrip(port, method, path, XParams{}, code, check301_and_307(ext)))
+			case []string:
+				code := 405
+				if method == "OPTIONS" {
+					code = 200
+				}
+				xassert.IsNil(t, roundtrip(port, method, path, XParams{}, code, check405(ext)))
+			}
 		}
 	}
 }
