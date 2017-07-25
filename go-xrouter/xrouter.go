@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-24
+// Last Change: 2017-07-25
 
 // Package go-xrouter is a trie based HTTP request router.
 //
