@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2016-10-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-29
+// Last Change: 2017-08-02
 
 // go-xlog implement a concurrently safe rotate-log.
 package xlog
@@ -220,28 +220,38 @@ func (xl *XLogger) Write(b []byte) (n int, err error) {
 }
 
 func (xl *XLogger) Fatal(format string, args ...interface{}) error {
-	_, err := xl.output(FATAL, fmt.Sprintf(format+"\n", args...))
+	_, err := xl.output(FATAL, xl.sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Error(format string, args ...interface{}) error {
-	_, err := xl.output(ERROR, fmt.Sprintf(format+"\n", args...))
+	_, err := xl.output(ERROR, xl.sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Warn(format string, args ...interface{}) error {
-	_, err := xl.output(WARN, fmt.Sprintf(format+"\n", args...))
+	_, err := xl.output(WARN, xl.sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Info(format string, args ...interface{}) error {
-	_, err := xl.output(INFO, fmt.Sprintf(format+"\n", args...))
+	_, err := xl.output(INFO, xl.sprintf(format, args...))
 	return err
 }
 
 func (xl *XLogger) Debug(format string, args ...interface{}) error {
-	_, err := xl.output(DEBUG, fmt.Sprintf(format+"\n", args...))
+	_, err := xl.output(DEBUG, xl.sprintf(format, args...))
 	return err
+}
+
+// In fact, I should implement two types interface likes Go standard package.
+// One interface is used to print directly, the other is used to print format
+// data, but it's too late, so I have to combine them.
+func (xl *XLogger) sprintf(format string, args ...interface{}) string {
+	if len(args) == 0 {
+		return fmt.Sprintln(format)
+	}
+	return fmt.Sprintf(format+"\n", args...)
 }
 
 // Close the XLogger instance. Operating on a closed XLogger instance
