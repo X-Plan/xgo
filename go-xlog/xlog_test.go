@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2016-11-08
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-06-29
+// Last Change: 2017-08-02
 
 package xlog
 
@@ -157,4 +157,11 @@ func TestNilXLogger(t *testing.T) {
 	xassert.IsNil(t, xl.Info("nothing"))
 	xassert.IsNil(t, xl.Debug("nothing"))
 	xassert.IsNil(t, xl.Close())
+}
+
+func TestSprintf(t *testing.T) {
+	var xl *XLogger
+	var format = "%s = %d"
+	xassert.Equal(t, xl.sprintf(format), "%s = %d\n")
+	xassert.Equal(t, xl.sprintf(format, "name", 100), "name = 100\n")
 }
