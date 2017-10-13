@@ -31,7 +31,8 @@ type TCP struct {
 	active    []*net.TCPListener
 }
 
-// The network type can only be tcp, tcp4 and tcp6.
+// This function is similar to net.Listen function, but it can return an inherited
+// listener from the parent process. The network type can only be tcp, tcp4 and tcp6.
 func (tcp *TCP) Listen(nt string, addr *net.TCPAddr) (*net.TCPListener, error) {
 	if nt == "tcp" || nt == "tcp4" || nt == "tcp6" {
 		err := tcp.inherit()
