@@ -5,7 +5,7 @@
 // Maintainer: blinklv <blinklv@icloud.com>
 // Last Change: 2017-10-16
 
-// This package is used to manage the shutdown and restart of servers.
+// This package is used to manage shutdown and restart of servers.
 package xserver
 
 import (
