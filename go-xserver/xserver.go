@@ -36,7 +36,7 @@ func Serve(servers ...Server) error {
 	var (
 		tcp  = &xtcpapi.TCP{}
 		errs = make(chan error, 2*len(servers)+1)
-		ls   = make([]net.Listener, len(servers))
+		ls   = make([]net.Listener, 0, len(servers))
 	)
 
 	for _, s := range servers {
