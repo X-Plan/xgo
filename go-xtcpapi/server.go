@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-10-13
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-10-13
+// Last Change: 2017-10-25
 
 package xtcpapi
 
@@ -139,7 +139,11 @@ func (s *Server) Quit() (err error) {
 			}
 		}
 
-		s.Logger.Info("quit %s server: %s", s.name, err)
+		if err == nil {
+			s.Logger.Info("quit %s server", s.name)
+		} else {
+			s.Logger.Error("quit %s server: %s", s.name, err)
+		}
 	})
 	return
 }
