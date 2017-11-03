@@ -1,9 +1,9 @@
 // server.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2017-02-07
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-02-10
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2017-11-03
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-11-03
 
 package xp
 
@@ -11,36 +11,27 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/X-Plan/xgo/go-xdebug"
 	"github.com/X-Plan/xgo/go-xlog"
+	"github.com/X-Plan/xgo/go-xtcpapi"
 	"net"
 	"regexp"
 	"sync"
 	"time"
 )
 
-const Version = "1.0.0"
-
-// 用来探测net.errClosing错误, 该错误标准库
-// 没有导出, 只有通过字符串的方式进行匹配.
-var reErrClosing = regexp.MustCompile(`use of closed network connection`)
-
-// 用于探测错误类型是否由于关闭连接导致.
-func IsErrClosing(err error) bool {
-	return reErrClosing.MatchString(fmt.Sprint(err))
-}
-
-// 命令分发器.
-type XMutex interface {
+type Handler interface {
 	Handle(net.Conn, chan int)
 }
 
-type XServer struct {
+type Server struct {
+	// This field is used by ListenAddr method to satisfy
+	// 'xserver.Server' interface, although it looks a bit
+	// redundant. When you use 'xserver.Serve' function,
+	// you must init it.
 	Addr      string
-	XMutex    XMutex
-	XL        *xlog.XLogger
-	TLSConfig *tls.Config
-	XD        *xdebug.XDebugger
+	Handler   Handler       // The key field of this struct, it can't be empty.
+	Logger    *xlog.XLogger // This field can be empty, but I recommend you use it.
+	TLSConfig *tls.Config   // optional TLS config.
 
 	l          net.Listener
 	exit       chan int
@@ -48,33 +39,23 @@ type XServer struct {
 	once       sync.Once
 	wg         sync.WaitGroup
 	name       string
-	// timeout只有在测试的情况下才使用.
-	timeout time.Duration
+	timeout    time.Duration // This field is only used in debug.
 }
 
-func (xs *XServer) Serve(l net.Listener) error {
-	var (
-		conn  net.Conn
-		err   error
-		delay time.Duration
-	)
-
-	if xs.XMutex == nil {
-		return errors.New("XMutex field is invalid")
+func (s *Server) Serve(l net.Listener) error {
+	if s.Handler == nil {
+		return fmt.Errorf("handler is invalid")
 	}
 
-	if xs.TLSConfig != nil {
-		l = tls.NewListener(l, xs.TLSConfig)
-		xs.name = "tcp/tls"
+	if s.TLSConfig != nil {
+		l = tls.NewListener(l, s.TLSConfig)
+		s.name = "tcp/tls"
 	} else {
-		xs.name = "tcp"
+		s.name = "tcp"
 	}
 
-	xs.l = l
-	xs.exit = make(chan int)
-	xs.acceptDone = make(chan int)
-
-	xs.XL.Info("start %s server (listen on %s)", xs.name, l.Addr())
+	s.l, s.exit, s.acceptDone = l, make(chan int), make(chan int)
+	s.info("start %s server (listen on %s)", s.name, l.Addr())
 outer:
 	for {
 		if conn, err = l.Accept(); err != nil {
@@ -87,54 +68,47 @@ outer:
 				if delay > time.Second {
 					delay = time.Second
 				}
-				xs.XL.Error("accept (%s) connection failed (retrying in %v): %s", xs.name, delay, err)
+				s.errorf("accept (%s) connection failed (retrying in %v): %s", s.name, delay, err)
 				time.Sleep(delay)
 				continue
 			}
 
-			// 一般情况下是由于l.Close操作引起的.
+			// Normally, it's caused by closing the listener.
 			break outer
 		}
-		xs.XD.Printf("accept (%s) connection (%s)", xs.name, conn.RemoteAddr())
-
 		delay = 0
 
-		xs.wg.Add(1)
+		s.wg.Add(1)
 		go func(conn net.Conn) {
-			xs.XMutex.Handle(conn, xs.exit)
-			xs.wg.Done()
-			xs.XD.Printf("release (%s) connection (%s)", xs.name, conn.RemoteAddr())
+			s.Handler.Handle(conn, s.exit)
+			s.wg.Done()
 		}(conn)
 	}
 
-	// 通知Quit操作accept操作已经关闭.
-	close(xs.acceptDone)
+	// Notify 'Quit' method that the accept operation has been done.
+	close(s.acceptDone)
 
-	if IsErrClosing(err) {
+	if xtcpapi.IsErrClosing(err) {
 		err = nil
 	}
 
 	return err
 }
 
-// 退出XServer服务.
-func (xs *XServer) Quit() (err error) {
-	xs.once.Do(func() {
-		var (
-			timeout  = xs.timeout
-			exitDone = make(chan int)
-		)
-		if xs.l != nil {
-			err = xs.l.Close()
+func (s *XServer) Quit() (err error) {
+	s.once.Do(func() {
+		timeout, exitDone := s.timeout, make(chan int)
+		if s.l != nil {
+			err = s.l.Close()
 		}
-		<-xs.acceptDone
+		<-s.acceptDone
 
 		go func() {
-			xs.wg.Wait()
+			s.wg.Wait()
 			exitDone <- 1
 		}()
 
-		close(xs.exit)
+		close(s.exit)
 
 		if timeout == 0 {
 			timeout = time.Minute
@@ -142,7 +116,7 @@ func (xs *XServer) Quit() (err error) {
 
 		select {
 		case <-exitDone:
-			xs.XL.Info("receive exit signal")
+			s.info("receive exit signal")
 		case <-time.After(timeout):
 			if err == nil {
 				err = errors.New("timeout")
@@ -150,20 +124,26 @@ func (xs *XServer) Quit() (err error) {
 		}
 
 		if err != nil {
-			xs.XL.Info("quit %s server: %s", xs.name, err)
+			s.errorf("quit %s server: %s", s.name, err)
 		} else {
-			xs.XL.Info("quit %s server", xs.name)
+			s.info("quit %s server", s.name)
 		}
 	})
 	return
 }
 
-// 调用Serve函数前的值为Addr字段, 调用Serve之后的
-// 值为Listener中Addr()函数的返回值.
-func (xs *XServer) ListenAddr() string {
-	if xs.l != nil {
-		return xs.l.Addr().String()
-	} else {
-		return xs.Addr
+func (s *Server) ListenAddr() string {
+	return s.Addr
+}
+
+func (s *Server) info(format string, args ...interface{}) {
+	if s.Logger != nil {
+		s.Logger.Info(format, args...)
+	}
+}
+
+func (s *Server) errorf(format string, args ...interface{}) {
+	if s.Logger != nil {
+		s.Logger.Error(format, args...)
 	}
 }
