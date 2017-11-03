@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-10
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-03
+// Last Change: 2017-11-03
 
 // go-xsched is a scheduler for load balancing, the implementation of it
 // is based on weight round-robin algorithm, it's concurrent-safe too.
@@ -19,7 +19,11 @@ import (
 	"time"
 )
 
-const Version = "1.0.1"
+// Scheduler is used for interface specification.
+type Scheduler interface {
+	Get() (string, error)
+	Feedback(string, bool)
+}
 
 type XScheduler struct {
 	addrs []*addrUnit
