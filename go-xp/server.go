@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-03
+// Last Change: 2017-11-06
 
 package xp
 
@@ -14,12 +14,11 @@ import (
 	"github.com/X-Plan/xgo/go-xlog"
 	"github.com/X-Plan/xgo/go-xtcpapi"
 	"net"
-	"regexp"
 	"sync"
 	"time"
 )
 
-type Handler interface {
+type ConnHandler interface {
 	Handle(net.Conn, chan int)
 }
 
@@ -29,7 +28,7 @@ type Server struct {
 	// redundant. When you use 'xserver.Serve' function,
 	// you must init it.
 	Addr      string
-	Handler   Handler       // The key field of this struct, it can't be empty.
+	Handler   ConnHandler   // The key field of this struct, it can't be empty.
 	Logger    *xlog.XLogger // This field can be empty, but I recommend you use it.
 	TLSConfig *tls.Config   // optional TLS config.
 
@@ -56,6 +55,13 @@ func (s *Server) Serve(l net.Listener) error {
 
 	s.l, s.exit, s.acceptDone = l, make(chan int), make(chan int)
 	s.info("start %s server (listen on %s)", s.name, l.Addr())
+
+	var (
+		conn  net.Conn
+		err   error
+		delay = time.Duration(0)
+	)
+
 outer:
 	for {
 		if conn, err = l.Accept(); err != nil {
@@ -95,7 +101,7 @@ outer:
 	return err
 }
 
-func (s *XServer) Quit() (err error) {
+func (s *Server) Quit() (err error) {
 	s.once.Do(func() {
 		timeout, exitDone := s.timeout, make(chan int)
 		if s.l != nil {

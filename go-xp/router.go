@@ -1,127 +1,133 @@
 // router.go
 //
-// 创建人: blinklv <blinklv@icloud.com>
-// 创建日期: 2017-02-07
-// 修订人: blinklv <blinklv@icloud.com>
-// 修订日期: 2017-10-25
+// Author: blinklv <blinklv@icloud.com>
+// Create Time: 2017-11-03
+// Maintainer: blinklv <blinklv@icloud.com>
+// Last Change: 2017-11-06
 
 package xp
 
 import (
-	"errors"
 	"fmt"
+	"github.com/X-Plan/xgo/go-xlog"
 	"github.com/X-Plan/xgo/go-xpacket"
+	"github.com/X-Plan/xgo/go-xtcpapi"
 	"github.com/golang/protobuf/proto"
 	"io"
-	"log"
 	"net"
 )
 
-// 与cmd/subcmd相关的处理接口.
-type XHandler interface {
+// A handler responds to an X-Protocol request.
+type Handler interface {
 	Handle(*Request) (*Response, error)
 }
 
-type XHandlerFunc func(*Request) (*Response, error)
+// HandlerFunc type is an adapter to allow the use of ordinary functions as
+// X-Protocol handlers.
+type HandlerFunc func(*Request) (*Response, error)
 
-func (xhf XHandlerFunc) Handle(req *Request) (*Response, error) {
-	return xhf(req)
+func (f HandlerFunc) Handle(req *Request) (*Response, error) {
+	return f(req)
 }
 
-// 与鉴权相关的处理接口.
-type XAuthHandler interface {
+// An authentication handler.
+type AuthHandler interface {
 	Handle(*Header) error
 }
 
-type XAuthHandlerFunc func(*Header) error
+// AuthHandlerFunc type is an adapter to allow the use of ordinary functions as
+// X-Protocol auth handlers.
+type AuthHandlerFunc func(*Header) error
 
-func (xaf XAuthHandlerFunc) Handle(head *Header) error {
-	return xaf(head)
+func (auth AuthHandlerFunc) Handle(header *Header) error {
+	return auth(header)
 }
 
-type XRouter struct {
-	ErrorLog *log.Logger
-	mh       map[uint64]xhandlerPair
+type handlerPair struct {
+	handler Handler
+	auth    AuthHandler
 }
 
-func NewXRouter() *XRouter {
-	return &XRouter{mh: make(map[uint64]xhandlerPair)}
+// Router is an implementation of 'ConnHandler' interface. It reads the data from
+// a connection and dispatches it to the corresponding handler based on command.
+type Router struct {
+	Logger *xlog.XLogger // This field can be empty, but I recommend you use it.
+	pairs  map[uint64]handlerPair
 }
 
-type xhandlerPair struct {
-	xh   XHandler
-	auth XAuthHandler
-}
-
-func (xr *XRouter) Register(cmd, subcmd uint32, xh XHandler, auth XAuthHandler) error {
-	if xh == nil {
-		return errors.New("XHandler can't be nil")
+// Bind a handler and an authentication handler to a command pair. If the command
+// pair of a request matches it, the corresponding handler and authentication handler
+// will be called to handle this request. 'handler' parameter can't be empty, but
+// 'auth' can be, it means there is no authentication scheme for this command pair.
+// If the command pairs of two handlers are same, the second one will overwrite the
+// first one.
+func (r *Router) Bind(cmd, subcmd uint32, handler Handler, auth AuthHandler) error {
+	if handler == nil {
+		return fmt.Errorf("handler can't be empty")
 	}
-	xr.mh[uint64(cmd)<<32+uint64(subcmd)] = xhandlerPair{xh, auth}
+	r.pairs[uint64(cmd)<<32+uint64(subcmd)] = handlerPair{handler, auth}
 	return nil
 }
 
-func (xr *XRouter) Lookup(cmd, subcmd uint32) (XHandler, XAuthHandler) {
-	if pair, ok := xr.mh[uint64(cmd)<<32+uint64(subcmd)]; ok {
-		return pair.xh, pair.auth
+// Return the handler pair corresponding a command pair, this function can be used
+// to check whether a command pair has been bound.
+func (r *Router) Lookup(cmd, subcmd uint32) (Handler, AuthHandler) {
+	if pair, ok := r.pairs[uint64(cmd)<<32+uint64(subcmd)]; ok {
+		return pair.handler, pair.auth
 	}
 	return nil, nil
 }
 
-func (xr *XRouter) logf(format string, v ...interface{}) {
-	if xr.ErrorLog != nil {
-		xr.ErrorLog.Printf(format, v...)
-	}
-}
-
-func (xr *XRouter) Handle(conn net.Conn, exit chan int) {
-	xrc := &xrouterConn{
+func (r *Router) Handle(conn net.Conn, exit chan int) {
+	cw := &connWrapper{
 		conn:     conn,
-		reqch:    make(chan *Request, 8),
+		queue:    make(chan *Request, 32),
 		readDone: make(chan int, 1),
 		exit:     exit,
-		xr:       xr,
+		r:        r,
 	}
-	go xrc.read()
-	xrc.write()
+	go cw.read()
+	cw.write()
 	conn.Close()
 }
 
-type xrouterConn struct {
-	conn     net.Conn
-	reqch    chan *Request
-	readDone chan int
-	exit     chan int
-	xr       *XRouter
-}
-
-func (xrc *xrouterConn) read() {
-	var (
-		err  error
-		data []byte
-		req  = &Request{}
-	)
-
-	for {
-		if data, err = xpacket.Decode(xrc.conn); err != nil {
-			if err != io.EOF {
-				xrc.xr.logf("xpacket decode failed (%s)", err)
-			}
-			xrc.readDone <- 1
-			return
-		}
-
-		if err = proto.Unmarshal(data, req); err != nil {
-			xrc.xr.logf("protobuf unmarshal failed (%s)", err)
-		}
-
-		xrc.reqch <- req
+func (r *Router) errorf(format string, args ...interface{}) {
+	if r.Logger != nil {
+		r.Logger.Error(format, args...)
 	}
 }
 
-func (xrc *xrouterConn) write() {
+type connWrapper struct {
+	conn     net.Conn
+	queue    chan *Request
+	readDone chan int
+	exit     chan int
+	r        *Router
+}
+
+func (cw *connWrapper) read() {
+	for {
+		data, err := xpacket.Decode(cw.conn)
+		if err != nil {
+			if err != io.EOF && !xtcpapi.IsErrClosing(err) {
+				cw.r.errorf("decode packet failed (%s)", err)
+			}
+			cw.readDone <- 1
+			return
+		}
+
+		req := &Request{}
+		if err = proto.Unmarshal(data, req); err != nil {
+			cw.r.errorf("protobuf unmarshal failed (%s)", err)
+		}
+
+		cw.queue <- req
+	}
+}
+
+func (cw *connWrapper) write() {
 	var (
-		code EnumRetCode
+		code Code
 		err  error
 		req  *Request
 	)
@@ -129,84 +135,87 @@ func (xrc *xrouterConn) write() {
 outer:
 	for {
 		select {
-		case req = <-xrc.reqch:
-			if err, code = xrc.handleAndWrite(req); err != nil {
-				xrc.xr.logf("%s", err)
+		case req = <-cw.queue:
+			if err, code = cw.handle(req); err != nil {
+				cw.r.errorf("handle request failed (%s)", err)
 			}
-			// 只有错误信息为服务内部错误时服务端才
-			// 主动断开连接.
-			if code == EnumRetCode_SERVER_ERROR {
+
+			if code == Code_SERVER_ERROR {
 				break outer
 			}
-		case <-xrc.exit:
+		case <-cw.exit:
 			break outer
 		}
 	}
 
-	switch cc := xrc.conn.(type) {
+	switch c := cw.conn.(type) {
 	case *net.TCPConn:
-		cc.CloseRead()
+		c.CloseRead()
 	case *net.UnixConn:
-		cc.CloseRead()
+		c.CloseRead()
 	default:
-		cc.Close()
+		c.Close()
 	}
-	<-xrc.readDone
+	<-cw.readDone
 
-	close(xrc.reqch)
-	for req = range xrc.reqch {
-		if err, _ = xrc.handleAndWrite(req); err != nil {
-			xrc.xr.logf("%s", err)
+	close(cw.queue)
+	for req = range cw.queue {
+		if err, _ = cw.handle(req); err != nil {
+			cw.r.errorf("handle request failed (%s)", err)
 		}
 	}
 
 	return
 }
 
-func (xrc *xrouterConn) handleAndWrite(req *Request) (error, EnumRetCode) {
-	var (
-		err      error
-		data     []byte
-		rsp      *Response
-		head     = req.GetHead()
-		xh, auth = xrc.xr.Lookup(head.GetCmd(), head.GetSubCmd())
-	)
+func (cw *connWrapper) handle(req *Request) (err error, code Code) {
+	code = Code_OK
+	head := req.GetHead()
+	handler, auth := cw.r.Lookup(head.GetCmd(), head.GetSubCmd())
+
+	defer func() {
+		if err != nil {
+			xpacket.Encode(cw.conn, response(head, code, err.Error()))
+		}
+	}()
 
 	if auth != nil {
 		if err = auth.Handle(head); err != nil {
-			xpacket.Encode(xrc.conn, createResponseData(head, EnumRetCode_AUTH_FAILED, err.Error()))
-			return err, EnumRetCode_AUTH_FAILED
+			code = Code_AUTH_FAILED
+			return
 		}
 	}
 
-	if xh == nil {
-		msg := fmt.Sprintf("invalid cmd/subcmd (%d/%d)", head.GetCmd(), head.GetSubCmd())
-		xpacket.Encode(xrc.conn, createResponseData(head, EnumRetCode_REQUEST_ERROR, msg))
-		return errors.New(msg), EnumRetCode_REQUEST_ERROR
+	if handler == nil {
+		err, code = fmt.Errorf("invalid cmd/subcmd (%d/%d)", head.GetCmd(), head.GetSubCmd()), Code_REQUEST_ERROR
+		return
 	}
 
-	if rsp, err = xh.Handle(req); err != nil {
-		msg := fmt.Sprintf("server internal error (%s)", err)
-		xpacket.Encode(xrc.conn, createResponseData(head, EnumRetCode_SERVER_ERROR, msg))
-		return errors.New(msg), EnumRetCode_SERVER_ERROR
+	var rsp *Response
+	if rsp, err = handler.Handle(req); err != nil {
+		code = Code_SERVER_ERROR
+		return
 	}
+
 	rsp.Head = req.GetHead()
+	// If caller doesn't fill 'ret' field, fill it automatically.
 	if rsp.Ret == nil {
 		rsp.Ret = &Return{Msg: "ok"}
 	}
 
-	if data, err = proto.Marshal(rsp); err == nil {
-		if err = xpacket.Encode(xrc.conn, data); err != nil {
-			return err, EnumRetCode_SERVER_ERROR
-		}
-	} else {
-		return err, EnumRetCode_SERVER_ERROR
+	var data []byte
+	if data, err = proto.Marshal(rsp); err != nil {
+		code = Code_SERVER_ERROR
+		return
 	}
 
-	return nil, EnumRetCode_OK
+	if err = xpacket.Encode(cw.conn, data); err != nil {
+		code = Code_SERVER_ERROR
+	}
+	return
 }
 
-func createResponseData(head *Header, code EnumRetCode, msg string) []byte {
+func response(head *Header, code Code, msg string) []byte {
 	data, _ := proto.Marshal(&Response{Head: head, Ret: &Return{Code: int32(code), Msg: msg}})
 	return data
 }

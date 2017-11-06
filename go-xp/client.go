@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-03
+// Last Change: 2017-11-06
 
 package xp
 
@@ -12,11 +12,10 @@ import (
 	"github.com/X-Plan/xgo/go-xconnpool"
 	"github.com/X-Plan/xgo/go-xpacket"
 	"github.com/X-Plan/xgo/go-xretry"
-	"github.com/X-Plan/xgo/go-xscheduler"
+	"github.com/X-Plan/xgo/go-xsched"
 	"github.com/golang/protobuf/proto"
 	"net"
 	"sync/atomic"
-	"time"
 )
 
 type Client struct {
@@ -24,7 +23,7 @@ type Client struct {
 	// so this field can't be empty. Its implementation must be satisfy
 	// 'xscheduler.Scheduler' interface, the more detail you can get from
 	// 'go-xscheduler' package.
-	Scheduler xscheduler.Scheduler
+	Scheduler xsched.Scheduler
 
 	// The internal of a client will maintain a connection pool, so this
 	// field is used to specify the size of the pool. If this field is zero,
@@ -41,7 +40,7 @@ type Client struct {
 func (client *Client) RoundTrip(req *Request) (*Response, error) {
 
 	// The first time we call this function, we need to init our client instance.
-	if client.xp == nil {
+	if client.xcp == nil {
 		if err := client.init(); err != nil {
 			return nil, err
 		}
@@ -70,12 +69,12 @@ func (client *Client) RoundTrip(req *Request) (*Response, error) {
 		return nil, err
 	}
 
-	if err = xpakcet.Encode(conn, data); err != nil {
+	if err = xpacket.Encode(conn, data); err != nil {
 		client.release(conn)
 		return nil, err
 	}
 
-	if data, err = xpakcet.Decode(conn); err != nil {
+	if data, err = xpacket.Decode(conn); err != nil {
 		client.release(conn)
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func (client *Client) RoundTrip(req *Request) (*Response, error) {
 		return nil, err
 	}
 
-	client.sched.Feedback(conn.RemoteAddr().String(), true)
+	client.Scheduler.Feedback(conn.RemoteAddr().String(), true)
 	return rsp, nil
 }
 
