@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-06
+// Last Change: 2017-11-08
 
 package xp
 
@@ -64,6 +64,9 @@ type Router struct {
 func (r *Router) Bind(cmd, subcmd uint32, handler Handler, auth AuthHandler) error {
 	if handler == nil {
 		return fmt.Errorf("handler can't be empty")
+	}
+	if r.pairs == nil {
+		r.pairs = make(map[uint64]handlerPair)
 	}
 	r.pairs[uint64(cmd)<<32+uint64(subcmd)] = handlerPair{handler, auth}
 	return nil

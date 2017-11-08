@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-06
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-07
+// Last Change: 2017-11-08
 
 package xp
 
@@ -11,11 +11,38 @@ import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"net"
-	"os"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestZeroClient(t *testing.T) {
+	testServer(t, 3*time.Second, 0, 10)
+}
+
+func TestZeroMsgClient(t *testing.T) {
+	testServer(t, 3*time.Second, 10, 0)
+}
+
+func TestServerCloseOneClient(t *testing.T) {
+	testServer(t, 5*time.Second, 1, 20)
+}
+
+func TestClientCloseOneClient(t *testing.T) {
+	testServer(t, 10*time.Second, 1, 3)
+}
+
+func TestServerCloseMultiClient(t *testing.T) {
+	testServer(t, 5*time.Second, 10, 20)
+}
+
+func TestClientCloseMultiClient(t *testing.T) {
+	testServer(t, 10*time.Second, 10, 3)
+}
+
+func TestMixCloseMultiClient(t *testing.T) {
+	testServer(t, 10*time.Second, 10, 3, 10, 20)
+}
 
 func testServer(t *testing.T, duration time.Duration, values ...int) {
 	l, port := freeListener(t)
@@ -56,10 +83,11 @@ func runClient(port string, n int, count int, errs chan error) {
 			}
 
 			for j := 0; j < count; j++ {
-				// Generate five command pair types.
-				subcmd, cmd := uint32((j%2+1)*1000), uint32((j%5-j%2+1)*1000)
+				// Generate five command pair types, the last two (cmd=3000) are
+				// invalid command pair.
+				subcmd, cmd := uint32((j%2+1)*1000), uint32(((j/2)%3+1)*1000)
 				rsp, err := client.RoundTrip(&Request{
-					Head: &Header{Sequence: uint64(j), Cmd: cmd, SubCmd, subcmd},
+					Head: &Header{Cmd: cmd, SubCmd: subcmd},
 					Body: []byte(fmt.Sprintf("[client %d] Tell Me: %d\n", id, j)),
 				})
 
@@ -70,6 +98,8 @@ func runClient(port string, n int, count int, errs chan error) {
 				} else {
 					fmt.Printf("[client %d] %s\n", id, string(rsp.GetBody()))
 				}
+
+				time.Sleep(time.Second)
 			}
 		}(i)
 	}
@@ -80,19 +110,25 @@ func runClient(port string, n int, count int, errs chan error) {
 
 func runServer(l net.Listener, duration time.Duration, errs chan error) {
 	router := &Router{}
-	router.Bind(handlerPair(1000, 1000, Code_OK))
-	router.Bind(handlerPair(1000, 2000, Code_SERVER_ERROR))
-	router.Bind(handlerPair(2000, 1000, Code_REQUEST_ERROR))
-	router.Bind(handlerPair(2000, 2000, Code_AUTH_FAILED))
+	router.Bind(genHandlerPair(1000, 1000, Code_OK))
+	router.Bind(genHandlerPair(1000, 2000, Code_REQUEST_ERROR))
+	router.Bind(genHandlerPair(2000, 1000, Code_SERVER_ERROR))
+	router.Bind(genHandlerPair(2000, 2000, Code_AUTH_FAILED))
 
 	s := &Server{Handler: router}
-	go func() { errs <- s.Serve(l) }()
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		errs <- s.Serve(l)
+		wg.Done()
+	}()
 	time.Sleep(duration)
 	errs <- s.Quit()
+	wg.Wait()
 	fmt.Printf("[server] Done\n")
 }
 
-func handlerPair(cmd, subcmd uint32, code Code) (uint32, uint32, Handler, AuthHandler) {
+func genHandlerPair(cmd, subcmd uint32, code Code) (uint32, uint32, Handler, AuthHandler) {
 	var (
 		handler Handler
 		auth    AuthHandler

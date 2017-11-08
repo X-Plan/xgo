@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-06
+// Last Change: 2017-11-08
 
 package xp
 
@@ -88,7 +88,7 @@ func (client *Client) RoundTrip(req *Request) (*Response, error) {
 	// If the error comes from a server end, we need to report it.
 	if rsp.GetRet().GetCode() == int32(Code_SERVER_ERROR) {
 		client.release(conn)
-		return nil, err
+		return rsp, nil
 	}
 
 	client.Scheduler.Feedback(conn.RemoteAddr().String(), true)
