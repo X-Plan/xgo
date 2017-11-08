@@ -23,7 +23,9 @@ The client end of *X-Protocol*. It has only one method (`RoundTrip`) currently, 
 
 ## Server & Router
 
-In fact, `Server` is independent of *X-Protocol*. Because the `Handler` field of it is connection-oriented, so you can use it separately when you don't use *X-Protocol*. But I recommend you use `Router` if you application depends on *X-Protocol*. It provides a request-oriented interface for you, which makes development easier.
+In fact, `Server` is independent of *X-Protocol*. Because the `Handler` field of it is connection-oriented, so you      
+can use it separately when you don't use *X-Protocol*. But I recommend you use `Router` if your application      
+depends on *X-Protocol*. It provides a request-oriented interface for you, which makes development easier.
 
 ```go
   router := &Router{}
