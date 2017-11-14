@@ -23,7 +23,7 @@ func Set(pidfile string) error {
 		return fmt.Errorf("PID file can't be empty")
 	}
 
-	err := os.MkdirAll(filepath.Dir(pidfile), os.FileMode(07555))
+	err := os.MkdirAll(filepath.Dir(pidfile), os.FileMode(0755))
 	if err != nil {
 		return err
 	}
