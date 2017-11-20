@@ -142,17 +142,17 @@ type XConfig struct {
 
 	// When the request url path is not matching any register route, NotFound
 	// handler will be called, If it's not set, http.NotFound is used.
-	NotFound http.Handler `json:"-"`
+	NotFound http.Handler `json:"-" yaml:"-"`
 
 	// Whe the request method is not matching any register route, MethodNotAllowed
 	// handler will be called. If it's not set, the DefaultMethodNotAllowed is
 	// used (Its implementation is just wrapping 'http.Error(w, "Method Not Allowed", 405)').
-	MethodNotAllowed http.Handler `json:"-"`
+	MethodNotAllowed http.Handler `json:"-" yaml:"-"`
 
 	// Function to handle panics recovered from http handlers.The handler can be
 	// used to keep your server from crashing because of unrecovered panics. You
 	// should return the http error code 500 (Internal Server Error) in this handler.
-	PanicHandler func(http.ResponseWriter, *http.Request, interface{}) `json:"-"`
+	PanicHandler func(http.ResponseWriter, *http.Request, interface{}) `json:"-" yaml:"-"`
 }
 
 // XRouter is the implementation of the 'http.Handler', which can be
