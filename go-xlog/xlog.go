@@ -63,7 +63,7 @@ type XConfig struct {
 	MaxSize int64 `json:"max_size" yaml:"max_size"`
 
 	// The max number of log files in the directory. The oldest log file
-	// will be deleted when the number of log files exceed this limit.
+	// will be deleted when the number of log files exceeds this limit.
 	// This field should be greater than or equal to zero, zero represent unlimited.
 	MaxBackups int64 `json:"max_backups" yaml:"max_backups"`
 
