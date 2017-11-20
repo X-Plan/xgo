@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-02-27
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-07-25
+// Last Change: 2017-11-20
 
 // Package go-xrouter is a trie based HTTP request router.
 //
@@ -142,17 +142,17 @@ type XConfig struct {
 
 	// When the request url path is not matching any register route, NotFound
 	// handler will be called, If it's not set, http.NotFound is used.
-	NotFound http.Handler
+	NotFound http.Handler `json:"-"`
 
 	// Whe the request method is not matching any register route, MethodNotAllowed
 	// handler will be called. If it's not set, the DefaultMethodNotAllowed is
 	// used (Its implementation is just wrapping 'http.Error(w, "Method Not Allowed", 405)').
-	MethodNotAllowed http.Handler
+	MethodNotAllowed http.Handler `json:"-"`
 
 	// Function to handle panics recovered from http handlers.The handler can be
 	// used to keep your server from crashing because of unrecovered panics. You
 	// should return the http error code 500 (Internal Server Error) in this handler.
-	PanicHandler func(http.ResponseWriter, *http.Request, interface{})
+	PanicHandler func(http.ResponseWriter, *http.Request, interface{}) `json:"-"`
 }
 
 // XRouter is the implementation of the 'http.Handler', which can be
