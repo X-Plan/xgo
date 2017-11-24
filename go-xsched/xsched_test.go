@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-12
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-05-03
+// Last Change: 2017-11-24
 
 package xsched
 
@@ -18,6 +18,16 @@ import (
 	"testing"
 	"time"
 )
+
+func TestEmpty(t *testing.T) {
+	xs, err := New(nil)
+	xassert.IsNil(t, err)
+	xassert.NotNil(t, xs)
+
+	address, err := xs.Get()
+	xassert.Match(t, err, `all hosts are temporarily unavailable`)
+	xassert.IsTrue(t, len(address) == 0)
+}
 
 func TestParseAddrUnit(t *testing.T) {
 	var strs = []struct {

@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-10
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-03
+// Last Change: 2017-11-24
 
 // go-xsched is a scheduler for load balancing, the implementation of it
 // is based on weight round-robin algorithm, it's concurrent-safe too.
@@ -26,14 +26,24 @@ type Scheduler interface {
 }
 
 type XScheduler struct {
+	rwmtx sync.RWMutex
+
+	// The following fields are protected by 'rwmtx' field. Why I don't use 'mtx'
+	// field?  // Because the following fields only be changed by 'Update', 'Add'
+	// and 'Remove' methods, The number of operating them is far less than the
+	// number of calling 'Get' method, I think a read-write lock is more suitable.
 	addrs []*addrUnit
 	addrm map[string]*addrUnit
 	n     int // number of address items
 	max   int // max weight
+	delta int // greatest common divisor
 
 	mtx sync.Mutex
-	i   int
-	cw  int
+
+	// The following fields are protected by 'mtx' field. They will be modified
+	// by 'Get' method every time, I can only try to reduce the critical region.
+	i  int
+	cw int
 }
 
 // Create a new instance of XScheduler. The strs parameter is the collection
@@ -44,7 +54,7 @@ type XScheduler struct {
 func New(strs []string) (*XScheduler, error) {
 	var (
 		xs    = &XScheduler{addrm: make(map[string]*addrUnit)}
-		delta int
+		delta = 1
 	)
 
 	for i, str := range strs {
@@ -81,7 +91,7 @@ func New(strs []string) (*XScheduler, error) {
 	for _, u := range xs.addrs {
 		u.weight = u.weight / delta
 	}
-	xs.max = xs.max / delta
+	xs.max, xs.delta = xs.max/delta, delta
 
 	xs.n, xs.i = len(xs.addrs), -1
 	return xs, nil
@@ -89,6 +99,9 @@ func New(strs []string) (*XScheduler, error) {
 
 // Get the address from scheduler, this function is concurrent-safe.
 func (xs *XScheduler) Get() (string, error) {
+	xs.rwmtx.RLock()
+	defer xs.rwmtx.RUnlock()
+
 	var (
 		i, cw   int
 		u       *addrUnit
@@ -132,9 +145,23 @@ func (xs *XScheduler) Get() (string, error) {
 // Feedback the result of an operation on special address, true
 // represent success, false represent failure.
 func (xs *XScheduler) Feedback(address string, result bool) {
+	xs.rwmtx.RLock()
 	if u, ok := xs.addrm[address]; ok {
 		u.Feedback(result)
 	}
+	xs.rwmtx.RUnlock()
+}
+
+func (xs *XScheduler) Update(strs []string) error {
+	return nil
+}
+
+func (xs *XScheduler) Add(strs []string) error {
+	return nil
+}
+
+func (xs *XScheduler) Remove(strs []string) error {
+	return nil
 }
 
 const (
