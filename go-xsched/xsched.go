@@ -29,9 +29,9 @@ type XScheduler struct {
 	rwmtx sync.RWMutex
 
 	// The following fields are protected by 'rwmtx' field. Why I don't use 'mtx'
-	// field?  // Because the following fields only be changed by 'Update', 'Add'
-	// and 'Remove' methods, The number of operating them is far less than the
-	// number of calling 'Get' method, I think a read-write lock is more suitable.
+	// field?  Because the following fields only be changed by 'Update', and
+	// 'Remove' methods, The number of operating them is far less than the number
+	// of calling 'Get' method, I think a read-write lock is more suitable.
 	addrs []*addrUnit
 	addrm map[string]*addrUnit
 	n     int // number of address items
@@ -152,15 +152,60 @@ func (xs *XScheduler) Feedback(address string, result bool) {
 	xs.rwmtx.RUnlock()
 }
 
-func (xs *XScheduler) Update(strs []string) error {
+func (xs *XScheduler) Update(str string) error {
 	return nil
 }
 
-func (xs *XScheduler) Add(strs []string) error {
-	return nil
-}
+// Remove an existing address, the format of 'str' parameter can be
+// 'ip:port', don't need the weight field.
+func (xs *XScheduler) Remove(str string) error {
+	tuple := strings.Split(str, ":")
+	if len(tuple) < 2 {
+		return fmt.Errorf("invalid format (%s)", str)
+	}
 
-func (xs *XScheduler) Remove(strs []string) error {
+	xs.rwmtx.Lock()
+	defer xs.rwmtx.Unlock()
+
+	address := tuple[0] + ":" + tuple[1]
+	unit := xs.addrm[address]
+	if unit == nil {
+		return fmt.Errorf("address (%s) doesn't exist", address)
+	}
+
+	delete(xs.addrm, address)
+
+	i, delta, xs.max = 0, 1, 0
+	for k, u := range xs.addrs {
+		if u != unit {
+			u.weight *= xs.delta
+			if u.weight > xs.max {
+				xs.max = u.weight
+			}
+
+			if i != 0 {
+				delta = gcd(delta, u.weight)
+			} else {
+				delta = u.weight
+			}
+		} else {
+			i = k
+		}
+	}
+
+	xs.addrs = append(xs.addrs[0:i], xs.addrs[i+1:]...)
+	for _, u := range xs.addrs {
+		u.weight = u.weight / delta
+	}
+	xs.max, xs.delta, xs.n = xs.max/delta, delta, len(xs.addrs)
+
+	// If the deleted element in front of the index 'xs.i', shift 'xs.i'
+	// for pointing to the original element. Because 'i' greater than zero
+	// and 'xs.i' greater than it, so 'xs.i - 1' must greater than zero.
+	if xs.n > 0 && xs.i > i {
+		xs.i = (xs.i - 1) % xs.n
+	}
+
 	return nil
 }
 
