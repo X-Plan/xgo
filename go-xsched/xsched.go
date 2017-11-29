@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-10
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-24
+// Last Change: 2017-11-29
 
 // go-xsched is a scheduler for load balancing, the implementation of it
 // is based on weight round-robin algorithm, it's concurrent-safe too.
@@ -152,8 +152,13 @@ func (xs *XScheduler) Feedback(address string, result bool) {
 	xs.rwmtx.RUnlock()
 }
 
+// If an existing address exists, update its weight, otherwise
+// add a new one.
 func (xs *XScheduler) Update(str string) error {
-	return nil
+	xs.rwmtx.Lock()
+	_, err := xs.update(str)
+	xs.rwmtx.Unlock()
+	return err
 }
 
 // Remove an existing address, the format of 'str' parameter can be
@@ -161,43 +166,16 @@ func (xs *XScheduler) Update(str string) error {
 func (xs *XScheduler) Remove(str string) error {
 	tuple := strings.Split(str, ":")
 	if len(tuple) < 2 {
-		return fmt.Errorf("invalid format (%s)", str)
+		return fmt.Errorf("invalid address format (%s)", str)
 	}
 
 	xs.rwmtx.Lock()
 	defer xs.rwmtx.Unlock()
 
-	address := tuple[0] + ":" + tuple[1]
-	unit := xs.addrm[address]
-	if unit == nil {
-		return fmt.Errorf("address (%s) doesn't exist", address)
+	i, err := xs.update(tuple[0] + ":" + tuple[1] + ":0")
+	if err != nil {
+		return err
 	}
-
-	delete(xs.addrm, address)
-
-	i, delta, xs.max = 0, 1, 0
-	for k, u := range xs.addrs {
-		if u != unit {
-			u.weight *= xs.delta
-			if u.weight > xs.max {
-				xs.max = u.weight
-			}
-
-			if i != 0 {
-				delta = gcd(delta, u.weight)
-			} else {
-				delta = u.weight
-			}
-		} else {
-			i = k
-		}
-	}
-
-	xs.addrs = append(xs.addrs[0:i], xs.addrs[i+1:]...)
-	for _, u := range xs.addrs {
-		u.weight = u.weight / delta
-	}
-	xs.max, xs.delta, xs.n = xs.max/delta, delta, len(xs.addrs)
 
 	// If the deleted element in front of the index 'xs.i', shift 'xs.i'
 	// for pointing to the original element. Because 'i' greater than zero
@@ -207,6 +185,72 @@ func (xs *XScheduler) Remove(str string) error {
 	}
 
 	return nil
+}
+
+func (xs *XScheduler) update(str string) (int, error) {
+	unit := newAddrUnit(str)
+	if unit == nil {
+		return -1, fmt.Errorf("invalid address format (%s)", str)
+	}
+
+	if u := xs.addrm[unit.address]; u != nil {
+		u.weight = unit.weight
+	} else {
+		xs.addrs = append(xs.addrs, unit)
+		xs.addrm[unit.address] = unit
+	}
+
+	return xs.adjust(unit), nil
+}
+
+// Adjust some fields (like 'max', 'delta' and 'n') of the 'XScheduler' instance, and
+// 'weight' field of each 'addrUnit' instance. But we need to do some special treatments
+// for 'unit' parameter, and return its index.
+func (xs *XScheduler) adjust(unit *addrUnit) int {
+
+	i, delta := 0, 0
+	xs.max = 0
+
+	for k, u := range xs.addrs {
+		if u != unit {
+			u.weight *= xs.delta
+		} else {
+			i = k
+		}
+
+		// If the weight of 'u' is zero, it must be equal to 'unit', skip
+		// it, because we will remove it.
+		if u.weight == 0 {
+			continue
+		}
+
+		if u.weight > xs.max {
+			xs.max = u.weight
+		}
+
+		if delta != 0 {
+			delta = gcd(delta, u.weight)
+		} else {
+			delta = u.weight
+		}
+	}
+
+	// If the weight of 'unit' is zero, remove it.
+	if unit.weight == 0 {
+		xs.addrs = append(xs.addrs[0:i], xs.addrs[i+1:]...)
+	}
+
+	if xs.n = len(xs.addrs); xs.n == 0 {
+		// There is no element, we don't need to do anything.
+		return i
+	}
+
+	for _, u := range xs.addrs {
+		u.weight = u.weight / delta
+	}
+	xs.max, xs.delta = xs.max/delta, delta
+
+	return i
 }
 
 const (
