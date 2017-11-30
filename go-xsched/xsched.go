@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-10
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-29
+// Last Change: 2017-11-30
 
 // go-xsched is a scheduler for load balancing, the implementation of it
 // is based on weight round-robin algorithm, it's concurrent-safe too.
@@ -54,10 +54,10 @@ type XScheduler struct {
 func New(strs []string) (*XScheduler, error) {
 	var (
 		xs    = &XScheduler{addrm: make(map[string]*addrUnit)}
-		delta = 1
+		delta = 0
 	)
 
-	for i, str := range strs {
+	for _, str := range strs {
 		u := newAddrUnit(str)
 		if u == nil {
 			return nil, fmt.Errorf("invalid address (%s)", str)
@@ -81,19 +81,23 @@ func New(strs []string) (*XScheduler, error) {
 		}
 
 		// Find the greatest common divisor of the all weights.
-		if i != 0 {
+		if delta != 0 {
 			delta = gcd(delta, u.weight)
 		} else {
 			delta = u.weight
 		}
 	}
 
+	if xs.n = len(xs.addrs); xs.n == 0 {
+		// No element, return directly.
+		return xs, nil
+	}
+
 	for _, u := range xs.addrs {
 		u.weight = u.weight / delta
 	}
-	xs.max, xs.delta = xs.max/delta, delta
 
-	xs.n, xs.i = len(xs.addrs), -1
+	xs.max, xs.delta, xs.i = xs.max/delta, delta, 0
 	return xs, nil
 }
 
@@ -111,7 +115,6 @@ func (xs *XScheduler) Get() (string, error) {
 
 	for retry > 0 {
 		xs.mtx.Lock()
-		xs.i = (xs.i + 1) % xs.n
 		if xs.i == 0 {
 			// We can directly use decrement operator, because we have
 			// already normalize the weight field (divided by gcd).
@@ -120,6 +123,8 @@ func (xs *XScheduler) Get() (string, error) {
 				xs.cw = xs.max
 			}
 		}
+		xs.i = (xs.i + 1) % xs.n
+
 		i, cw = xs.i, xs.cw
 		xs.mtx.Unlock()
 
@@ -195,6 +200,7 @@ func (xs *XScheduler) update(str string) (int, error) {
 
 	if u := xs.addrm[unit.address]; u != nil {
 		u.weight = unit.weight
+		unit = u // NOTE: Don't forget this step.
 	} else {
 		xs.addrs = append(xs.addrs, unit)
 		xs.addrm[unit.address] = unit
@@ -238,10 +244,12 @@ func (xs *XScheduler) adjust(unit *addrUnit) int {
 	// If the weight of 'unit' is zero, remove it.
 	if unit.weight == 0 {
 		xs.addrs = append(xs.addrs[0:i], xs.addrs[i+1:]...)
+		delete(xs.addrm, unit.address)
 	}
 
 	if xs.n = len(xs.addrs); xs.n == 0 {
-		// There is no element, we don't need to do anything.
+		// There is no element, but we need to reset 'delta' field to zero.
+		xs.delta = 0
 		return i
 	}
 
