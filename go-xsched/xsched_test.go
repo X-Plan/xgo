@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-03-12
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-30
+// Last Change: 2017-12-01
 
 package xsched
 
@@ -210,7 +210,7 @@ func TestXScheduler(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 
 			for j := 0; j < 5000; j++ {
@@ -222,9 +222,18 @@ func TestXScheduler(t *testing.T) {
 				ac := acs[address]
 				xs.Feedback(address, ac.seed())
 				atomic.AddInt64(&(ac.total), int64(1))
-				time.Sleep(100 * time.Millisecond)
+
+				if j == 2500 && i == 3 {
+					xassert.IsNil(t, xs.Remove(address))
+					fmt.Printf("remove address (%s)\n", address)
+				}
+
+				if j == 2500 && i == 5 {
+					xassert.IsNil(t, xs.Update(address+":100"))
+					fmt.Printf("update the weight of address (%s) to 100\n", address)
+				}
 			}
-		}()
+		}(i)
 	}
 
 	wg.Wait()
@@ -309,6 +318,14 @@ func TestRemove(t *testing.T) {
 		"192.168.1.17:80:70",
 	}
 
+	// Test remove a non-existing address.
+	xs1, _ := New(strs)
+	xassert.NotNil(t, xs1)
+	xs2, _ := New(strs)
+	xassert.NotNil(t, xs2)
+	xassert.IsNil(t, xs1.Remove("192.168.1.20:80"))
+	xassert.IsNil(t, xs1.equal(xs2))
+
 	for len(strs) > 0 {
 		xs1, _ := New(strs)
 		xassert.NotNil(t, xs1)
@@ -323,6 +340,7 @@ func TestRemove(t *testing.T) {
 		xassert.IsNil(t, xs1.Remove(address))
 		xassert.IsNil(t, xs1.equal(xs2))
 	}
+
 }
 
 // Generate an even number between 2 and 50.
