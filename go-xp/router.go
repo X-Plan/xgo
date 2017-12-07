@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-08
+// Last Change: 2017-12-07
 
 package xp
 
@@ -146,6 +146,8 @@ outer:
 			if code == Code_SERVER_ERROR {
 				break outer
 			}
+		case <-cw.readDone:
+			break outer
 		case <-cw.exit:
 			break outer
 		}
@@ -159,7 +161,6 @@ outer:
 	default:
 		c.Close()
 	}
-	<-cw.readDone
 
 	close(cw.queue)
 	for req = range cw.queue {
