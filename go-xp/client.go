@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-08
+// Last Change: 2017-12-15
 
 package xp
 
@@ -25,13 +25,14 @@ type Client struct {
 	// 'go-xscheduler' package.
 	Scheduler xsched.Scheduler
 
-	// The internal of a client will maintain a connection pool, so this
-	// field is used to specify the size of the pool. If this field is zero,
-	// using 32 by default, but this field can't be negative.
+	// The internal of a client will maintain a connection pool for each
+	// address returned by 'Scheduler' field, so this field is used to
+	// specify the size of each pool. If this field is zero, using 32 by
+	// default, but this field can't be negative.
 	PoolSize int
 
-	seq uint64
-	xcp *xconnpool.XConnPool
+	seq  uint64
+	xcps *xconnpool.XConnPools
 }
 
 // Send a request to a server and receive the response. If "Sequence" field in
@@ -40,7 +41,7 @@ type Client struct {
 func (client *Client) RoundTrip(req *Request) (*Response, error) {
 
 	// The first time we call this function, we need to init our client instance.
-	if client.xcp == nil {
+	if client.xcps == nil {
 		if err := client.init(); err != nil {
 			return nil, err
 		}
@@ -50,7 +51,7 @@ func (client *Client) RoundTrip(req *Request) (*Response, error) {
 		req.Head.Sequence = atomic.AddUint64(&client.seq, uint64(1))
 	}
 
-	conn, err := client.xcp.Get()
+	conn, err := client.xcps.Get()
 	if err != nil {
 		if fatal, ok := err.(xconnpool.GetConnError); ok {
 			client.Scheduler.Feedback(fatal.Addr, false)
@@ -107,18 +108,7 @@ func (client *Client) init() error {
 		size = 32
 	}
 
-	client.xcp = xconnpool.New(size, func() (net.Conn, error) {
-		addr, err := client.Scheduler.Get()
-		if err != nil {
-			return nil, err
-		}
-
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			return nil, xconnpool.GetConnError{Err: err, Addr: addr}
-		}
-		return conn, nil
-	})
+	client.xcps = xconnpool.NewXConnPools(size, client.Scheduler)
 	return nil
 }
 
