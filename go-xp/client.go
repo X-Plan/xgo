@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-11-03
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-12-15
+// Last Change: 2017-12-18
 
 package xp
 
@@ -108,7 +108,7 @@ func (client *Client) init() error {
 		size = 32
 	}
 
-	client.xcps = xconnpool.NewXConnPools(size, client.Scheduler)
+	client.xcps = xconnpool.NewXConnPools(size, client.Scheduler, net.Dial)
 	return nil
 }
 
