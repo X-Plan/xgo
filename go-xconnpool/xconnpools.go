@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-12-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-12-11
+// Last Change: 2017-12-18
 
 package xconnpool
 
@@ -24,13 +24,16 @@ type XConnPools struct {
 	exit      chan struct{}
 	scheduler xsched.Scheduler
 	pools     poolsType
+	dial      Dial
 }
+
+type Dial func(network, address string) (net.Conn, error)
 
 // Create a new 'XConnPools'. 'XConnPools' will create a single connection pool for each
 // address returned by 'scheduler' parameter. 'capacity' means the capacity of each pool
 // instead of total capacity. If 'capacity' is less than or equal to zero or 'scheduler'
-// is nil, returns nil.
-func NewXConnPools(capacity int, scheduler xsched.Scheduler) *XConnPools {
+// is nil, returns nil. 'dial' is used to create new connections.
+func NewXConnPools(capacity int, scheduler xsched.Scheduler, dial Dial) *XConnPools {
 	if capacity <= 0 || scheduler == nil {
 		return nil
 	}
@@ -40,6 +43,7 @@ func NewXConnPools(capacity int, scheduler xsched.Scheduler) *XConnPools {
 		exit:      make(chan struct{}),
 		scheduler: scheduler,
 		pools:     poolsType{&sync.RWMutex{}, make(map[string]*XConnPool)},
+		dial:      dial,
 	}
 	go xcps.clean()
 	return xcps
@@ -85,7 +89,7 @@ func (xcps *XConnPools) selectPool() (*XConnPool, error) {
 	pool := xcps.pools.Get(address)
 	if pool == nil {
 		pool = New(xcps.capacity, func() (net.Conn, error) {
-			return net.Dial("tcp", address)
+			return xcps.dial("tcp", address)
 		})
 		xcps.pools.Set(address, pool)
 	}
@@ -94,10 +98,18 @@ func (xcps *XConnPools) selectPool() (*XConnPool, error) {
 	return pool, nil
 }
 
+var cleanPeriod time.Duration // This variable is only used to debug.
+
 // If a pool has never be used in the last one hour, it will be closed and
 // removed from the pools.
 func (xcps *XConnPools) clean() {
-	ticker := time.NewTicker(time.Hour)
+	var ticker *time.Ticker
+	if cleanPeriod == time.Duration(0) {
+		ticker = time.NewTicker(time.Hour)
+	} else {
+		ticker = time.NewTicker(cleanPeriod)
+	}
+
 	for {
 		select {
 		case <-ticker.C:
