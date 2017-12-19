@@ -13,8 +13,8 @@ return it to the connection pool instead of releasing it directly.
 is based on [Go Channel](https://tour.golang.org/concurrency/2)
 - **XConnPools**: XConnPools is also a connection pool type based on XConnPool type. The objective     
 of designing it is to solve the redistribution problem of backend addresses, this can't be detected    
-by XConnPool. I recommend you use this instead of XConnPool when backend addresses can be changed       
-dynamically.
+by XConnPool. I recommend you use this instead of XConnPool when backend addresses can be      
+changed dynamically.
 
 ## XConnPool Usage
 
@@ -90,4 +90,4 @@ if err = xcps.Close(); err != nil {
 ```
 
 It's similar to the usage of **XConnPool**, but maybe you need to know more detail     
-about [go-xsched](../go-xsched/README.md) package.
+about [go-xsched](../go-xsched) package.
