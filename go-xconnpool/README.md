@@ -11,8 +11,12 @@ connection. Each XConn is concern with a **XConnPool**, and closing a XConn will
 return it to the connection pool instead of releasing it directly.    
 - **XConnPool**: XConnPool is a connection pool of XConn. For concurrent safe, its implementation    
 is based on [Go Channel](https://tour.golang.org/concurrency/2)
+- **XConnPools**: XConnPools is also a connection pool type based on XConnPool type. The objective     
+of designing it is to solve the redistribution problem of backend addresses, this can't be detected    
+by XConnPool. I recommend you use this instead of XConnPool when backend addresses can be changed       
+dynamically.
 
-## Usage
+## XConnPool Usage
 
 ``` go
 var (
@@ -51,3 +55,39 @@ if err = xcp.Close(); err != nil {
 The more detail example you can find in **test** directory :smirk:.
 
 
+
+## XConnPools Usage
+
+```go
+addrs := []string{
+		"192.168.1.100:80:10",
+		"192.168.1.101:80:10",
+		"192.168.1.102:80:10",
+		"192.168.1.103:80:10",
+		"192.168.1.104:80:10",
+}
+
+scheduler, _ := xsched.New(addrs)
+xcps := xconnpool.NewXConnPools(32, scheduler, net.Dial)
+if xcps != nil {
+  // Handle error.
+}
+
+conn, err := xcps.Get()
+if err != nil {
+  // Handle error.
+}
+
+io.WriteString(conn, "Hello World!")
+
+if err = conn.Close(); err != nil {
+  // Handle error.
+}
+
+if err = xcps.Close(); err != nil {
+  // Handle error.
+}
+```
+
+It's similar to the usage of **XConnPool**, but maybe you need to know more detail     
+about [go-xsched](../go-xsched/README.md) package.
