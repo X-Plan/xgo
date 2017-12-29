@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2017-12-01
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-12-18
+// Last Change: 2017-12-28
 
 package xconnpool
 
@@ -145,20 +145,20 @@ type poolsType struct {
 	pools map[string]*XConnPool
 }
 
-func (pt poolsType) Get(address string) *XConnPool {
+func (pt *poolsType) Get(address string) *XConnPool {
 	pt.RLock()
 	pool := pt.pools[address]
 	pt.RUnlock()
 	return pool
 }
 
-func (pt poolsType) Set(address string, pool *XConnPool) {
+func (pt *poolsType) Set(address string, pool *XConnPool) {
 	pt.Lock()
 	pt.pools[address] = pool
 	pt.Unlock()
 }
 
-func (pt poolsType) Delete(address string) {
+func (pt *poolsType) Delete(address string) {
 	pt.Lock()
 	delete(pt.pools, address)
 	pt.Unlock()
@@ -167,7 +167,7 @@ func (pt poolsType) Delete(address string) {
 // Iterate each item in 'pools' and handle it by using a user-defined callback function.
 // NOTE: The implementation of a callback function shouldn't contain any operation of
 // pools itself (Get, Set, Delete and ForEach), this will lead to deadlock.
-func (pt poolsType) ForEach(cb func(string, *XConnPool) error) error {
+func (pt *poolsType) ForEach(cb func(string, *XConnPool) error) error {
 	var err error
 	pt.RLock()
 	for address, pool := range pt.pools {
