@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2016-10-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-11-15
+// Last Change: 2018-01-24
 
 // go-xlog implement a concurrently safe rotate-log.
 package xlog
@@ -48,38 +48,6 @@ var dirMtx = &sync.Mutex{}
 
 // Throw this error when operating on a closed log.
 var ErrClosed = errors.New("XLogger has been closed")
-
-// This configure is used to create 'XLogger'.
-type XConfig struct {
-	// The directory to store log files. If it's empty, './log' directory
-	// will be used by default.  If this directory doesn't exist, it will
-	// be created automatically.
-	Dir string `json:"dir" yaml:"dir"`
-
-	// The max file size of each log file, the unit is byte. When the size
-	// of current log file exceeds this limit, switching to new log file
-	// for writing. This field should be greater than or equal to zero,
-	// zero represent unlimited.
-	MaxSize int64 `json:"max_size" yaml:"max_size"`
-
-	// The max number of log files in the directory. The oldest log file
-	// will be deleted when the number of log files exceeds this limit.
-	// This field should be greater than or equal to zero, zero represent unlimited.
-	MaxBackups int64 `json:"max_backups" yaml:"max_backups"`
-
-	// The max age of each log file. When the age of a log file exceed this
-	// limit, it will be deleted. This field should be greater than or equal
-	// to zero, zero represent unlimited.
-	MaxAge string `json:"max_age" yaml:"max_age"`
-
-	// Log tag. If not set, the process name will be used by default.
-	Tag string `json:"tag" yaml:"tag"`
-
-	// Log level. Only the priority of operation is higher than this field,
-	// messages can be written to a log file, otherwise written to standard
-	// error output. Call 'Write' function will ignore this field.
-	Level int `json:"level" yaml:"level"`
-}
 
 // The format of log:
 // [yyyy-mm-dd hh:mm:ss][tag][level][location]: message
