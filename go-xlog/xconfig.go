@@ -3,12 +3,14 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2018-01-24
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-01-24
+// Last Change: 2018-01-25
 package xlog
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
+	"strconv"
 )
 
 // This configure type is used to create 'XLogger'.
@@ -42,8 +44,49 @@ type XConfig struct {
 	Level int `json:"level" yaml:"level"`
 }
 
-// Import a readable format data to the XConfig instance.
+// Import a readable format data to the XConfig instance. Even through this function
+// returns a error, some fields of the XConfig instance have been changed. So you should
+// be careful with this feature.
 func (xcfg *XConfig) Import(data map[string]interface{}) error {
+	var err error
+
+	if str, ok := (data["dir"]).(string); ok {
+		xcfg.Dir = str
+	}
+
+	if str, ok := (data["max_size"]).(string); ok {
+		if xcfg.MaxSize, err = parseMaxSize(str); err != nil {
+			return fmt.Errorf("'max_size' %s", err)
+		}
+	}
+
+	maxBackups := reflect.ValueOf(data["max_backups"])
+	switch maxBackups.Kind() {
+	case reflect.Float32, reflect.Float64:
+		xcfg.MaxBackups = int64(maxBackups.Float())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		xcfg.MaxBackups = maxBackups.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		xcfg.MaxBackups = int64(maxBackups.Uint())
+	}
+
+	if str, ok := (data["max_age"]).(string); ok {
+		if xcfg.MaxAge, err = parseMaxAge(str); err != nil {
+			return fmt.Errorf("'max_age' %s", err)
+		}
+	}
+
+	if str, ok := (data["tag"]).(string); ok {
+		xcfg.Tag = str
+	}
+
+	if str, ok := (data["level"]).(string); ok {
+		if xcfg.Level, err = parseLevel(str); err != nil {
+			return fmt.Errorf("'level' %s", err)
+		}
+	}
+
+	return nil
 }
 
 // The readable format of 'max_size' field: NUMBER [N space] {kb|KB|mb|MB|gb|GB}
@@ -57,12 +100,17 @@ const (
 )
 
 func parseMaxSize(str string) (int64, error) {
-	results := reMaxSize.FindStringSubmatch(str)
+	var (
+		err     error
+		number  int
+		results = reMaxSize.FindStringSubmatch(str)
+	)
+
 	if len(results) != 3 {
 		goto format_error
 	}
 
-	number, err := strconv.Atoi(results[1])
+	number, err = strconv.Atoi(results[1])
 	if err != nil {
 		goto format_error
 	}
@@ -95,12 +143,16 @@ const (
 )
 
 func parseMaxAge(str string) (string, error) {
-	results := reMaxAge.FindStringSubmatch(str)
+	var (
+		err     error
+		number  int
+		results = reMaxAge.FindStringSubmatch(str)
+	)
 	if len(results) != 3 {
 		goto format_error
 	}
 
-	number, err := strconv.Atoi(results[1])
+	number, err = strconv.Atoi(results[1])
 	if err != nil {
 		goto format_error
 	}
@@ -154,4 +206,5 @@ func parseLevel(str string) (int, error) {
 
 // Export a XConfig instance to a readable format data.
 func (xcfg *XConfig) Export(data map[string]interface{}) error {
+	return nil
 }
