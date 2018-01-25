@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 // This configure type is used to create 'XLogger'.
@@ -91,7 +92,7 @@ func (xcfg *XConfig) Import(data map[string]interface{}) error {
 
 // The readable format of 'max_size' field: NUMBER [N space] {kb|KB|mb|MB|gb|GB}
 // You can add some spaces at the head, but I don't recommend it.
-var reMaxSize = regexp.MustCompile(`^\s*(\d+)\s*(kb|KB|mb|MB|gb|GB)$`)
+var reMaxSize = regexp.MustCompile(`^\s*(\d+)\s*(b|B|kb|KB|mb|MB|gb|GB)$`)
 
 const (
 	gigaByte = 1024 * megaByte
@@ -204,7 +205,72 @@ func parseLevel(str string) (int, error) {
 	return level, nil
 }
 
+var levelReadable = [...]string{"", "fatal", "error", "warn", "info", "debug"}
+
 // Export a XConfig instance to a readable format data.
 func (xcfg *XConfig) Export(data map[string]interface{}) error {
+	if len(xcfg.Dir) != 0 {
+		data["dir"] = xcfg.Dir
+	}
+	if xcfg.MaxSize > 0 {
+		data["max_size"] = readableMaxSize(int(xcfg.MaxSize))
+	}
+	if xcfg.MaxBackups > 0 {
+		data["max_backups"] = xcfg.MaxBackups
+	}
+	if len(xcfg.MaxAge) != 0 {
+		if maxAge, err := time.ParseDuration(xcfg.MaxAge); err != nil {
+			return fmt.Errorf("invalid 'MaxAge' (%s)", err)
+		} else if min := int(maxAge / time.Minute); min > 0 {
+			// The 'MaxAge' should be greater than or equal to one minute at least.
+			data["max_age"] = readableMaxAge(min)
+		}
+	}
+	if len(xcfg.Tag) != 0 {
+		data["tag"] = xcfg.Tag
+	}
+	if xcfg.Level > 0 && xcfg.Level < len(levelReadable) {
+		data["level"] = levelReadable[xcfg.Level]
+	}
+
 	return nil
+}
+
+// When we transform 'MaxSize' to its readable format, which maybe loses precision,
+// but it's less than one percent.
+func readableMaxSize(maxSize int) string {
+	if gb, r := maxSize/gigaByte, maxSize%gigaByte; 100*r < gb {
+		return fmt.Sprintf("%d GB", gb)
+	}
+
+	if mb, r := maxSize/megaByte, maxSize%megaByte; 100*r < mb {
+		return fmt.Sprintf("%d MB", mb)
+	}
+
+	if kb, r := maxSize/kiloByte, maxSize%kiloByte; 100*r < kb {
+		return fmt.Sprintf("%d KB", kb)
+	}
+
+	return fmt.Sprintf("%d B", maxSize)
+}
+
+// When we transform 'MaxAge' to its readable format, which maybe loses precision,
+// but it's less than one percent.
+func readableMaxAge(min int) string {
+	if year, r := min/year2min, min%year2min; 100*r < year {
+		return fmt.Sprintf("%d year", year)
+	}
+	if month, r := min/month2min, min%month2min; 100*r < month {
+		return fmt.Sprintf("%d month", month)
+	}
+	if week, r := min/week2min, min%week2min; 100*r < week {
+		return fmt.Sprintf("%d week", week)
+	}
+	if day, r := min/day2min, min%day2min; 100*r < day {
+		return fmt.Sprintf("%d day", day)
+	}
+	if hour, r := min/hour2min, min%hour2min; 100*r < hour {
+		return fmt.Sprintf("%d hour", hour)
+	}
+	return fmt.Sprintf("%d min", min)
 }
