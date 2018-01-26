@@ -39,3 +39,29 @@ func TestParseMaxSize(t *testing.T) {
 		}
 	}
 }
+
+func TestParseMaxAge(t *testing.T) {
+	elements := []struct {
+		str    string
+		maxAge string
+		ok     bool
+	}{
+		{"  20   min", "20m", true},
+		{"1 hour", "60m", true},
+		{"7day", "10080m", true},
+		{"2 week", "20160m", true},
+		{"3 month", "133920m", true},
+		{"2 year", "1054080m", true},
+		{" 32 year ", "", false},
+		{" asd hour", "", false},
+	}
+
+	for _, element := range elements {
+		maxAge, err := parseMaxAge(element.str)
+		if element.ok {
+			xassert.Equal(t, maxAge, element.maxAge)
+		} else {
+			xassert.NotNil(t, err)
+		}
+	}
+}

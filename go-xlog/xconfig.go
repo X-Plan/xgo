@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2018-01-24
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-01-25
+// Last Change: 2018-01-26
 package xlog
 
 import (
@@ -160,15 +160,15 @@ func parseMaxAge(str string) (string, error) {
 
 	switch results[2] {
 	case "year":
-		number = year2min
+		number *= year2min
 	case "month":
-		number = month2min
+		number *= month2min
 	case "week":
-		number = week2min
+		number *= week2min
 	case "day":
-		number = day2min
+		number *= day2min
 	case "hour":
-		number = hour2min
+		number *= hour2min
 	}
 
 	return fmt.Sprintf("%dm", number), nil
