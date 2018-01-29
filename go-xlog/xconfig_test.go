@@ -91,3 +91,56 @@ func TestParseLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestImport(t *testing.T) {
+	elements := []struct {
+		data map[string]interface{}
+		ok   bool
+	}{
+		{map[string]interface{}{
+			"dir":         "/tmp/log",
+			"max_size":    "2 GB",
+			"max_backups": 50,
+			"max_age":     "6 month",
+			"tag":         "test 1",
+			"level":       "info",
+		}, true},
+		{map[string]interface{}{
+			"dir":         "/tmp/log",
+			"max_size":    "512 mb",
+			"max_backups": float64(32),
+			"max_age":     "2 week",
+			"tag":         "test 2",
+			"level":       "debug",
+		}, true},
+		{map[string]interface{}{"dir": "/tmp/log"}, true},
+		{map[string]interface{}{"max_size": 10 * kiloByte}, true},
+		{map[string]interface{}{"max_size": "10 kb"}, true},
+		{map[string]interface{}{"max_backups": 50.1}, true},
+		{map[string]interface{}{"max_age": "5 month"}, true},
+		{map[string]interface{}{"tag": "hello"}, true},
+		{map[string]interface{}{"level": "fatal"}, true},
+
+		{map[string]interface{}{
+			"dir":         "/tmp/log",
+			"max_size":    "512 mb",
+			"max_backups": uint8(32),
+			"max_age":     "6 day",
+			"tag":         "test 3",
+			"level":       "hello",
+		}, false},
+		{map[string]interface{}{"max_size": "a MB"}, false},
+		{map[string]interface{}{"max_age": "10 days"}, false},
+		{map[string]interface{}{"level": "nothing"}, false},
+	}
+
+	for _, element := range elements {
+		xcfg := &XConfig{}
+		err := xcfg.Import(element.data)
+		if element.ok {
+			xassert.IsNil(t, err)
+		} else {
+			xassert.NotNil(t, err)
+		}
+	}
+}
