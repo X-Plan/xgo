@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2018-01-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-01-26
+// Last Change: 2018-01-29
 package xlog
 
 import (
@@ -60,6 +60,32 @@ func TestParseMaxAge(t *testing.T) {
 		maxAge, err := parseMaxAge(element.str)
 		if element.ok {
 			xassert.Equal(t, maxAge, element.maxAge)
+		} else {
+			xassert.NotNil(t, err)
+		}
+	}
+}
+
+func TestParseLevel(t *testing.T) {
+	elements := []struct {
+		str   string
+		level int
+		ok    bool
+	}{
+		{"fatal", FATAL, true},
+		{"error", ERROR, true},
+		{"warn", WARN, true},
+		{"info", INFO, true},
+		{"debug", DEBUG, true},
+		{"Fatal", -1, false},
+		{"eRror", -1, false},
+		{"hello world", -1, false},
+	}
+
+	for _, element := range elements {
+		level, err := parseLevel(element.str)
+		if element.ok {
+			xassert.Equal(t, level, element.level)
 		} else {
 			xassert.NotNil(t, err)
 		}
