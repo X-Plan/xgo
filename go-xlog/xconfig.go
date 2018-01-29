@@ -239,15 +239,15 @@ func (xcfg *XConfig) Export(data map[string]interface{}) error {
 // When we transform 'MaxSize' to its readable format, which maybe loses precision,
 // but it's less than one percent.
 func readableMaxSize(maxSize int) string {
-	if gb, r := maxSize/gigaByte, maxSize%gigaByte; 100*r < gb*gigaByte {
+	if gb, r := maxSize/gigaByte, maxSize%gigaByte; 100*r < maxSize {
 		return fmt.Sprintf("%d GB", gb)
 	}
 
-	if mb, r := maxSize/megaByte, maxSize%megaByte; 100*r < mb*megaByte {
+	if mb, r := maxSize/megaByte, maxSize%megaByte; 100*r < maxSize {
 		return fmt.Sprintf("%d MB", mb)
 	}
 
-	if kb, r := maxSize/kiloByte, maxSize%kiloByte; 100*r < kb*kiloByte {
+	if kb, r := maxSize/kiloByte, maxSize%kiloByte; 100*r < maxSize {
 		return fmt.Sprintf("%d KB", kb)
 	}
 
@@ -257,19 +257,19 @@ func readableMaxSize(maxSize int) string {
 // When we transform 'MaxAge' to its readable format, which maybe loses precision,
 // but it's less than one percent.
 func readableMaxAge(min int) string {
-	if year, r := min/year2min, min%year2min; 100*r < year*year2min {
+	if year, r := min/year2min, min%year2min; 100*r < min {
 		return fmt.Sprintf("%d year", year)
 	}
-	if month, r := min/month2min, min%month2min; 100*r < month*month2min {
+	if month, r := min/month2min, min%month2min; 100*r < min {
 		return fmt.Sprintf("%d month", month)
 	}
-	if week, r := min/week2min, min%week2min; 100*r < week*week2min {
+	if week, r := min/week2min, min%week2min; 100*r < min {
 		return fmt.Sprintf("%d week", week)
 	}
-	if day, r := min/day2min, min%day2min; 100*r < day*day2min {
+	if day, r := min/day2min, min%day2min; 100*r < min {
 		return fmt.Sprintf("%d day", day)
 	}
-	if hour, r := min/hour2min, min%hour2min; 100*r < hour*hour2min {
+	if hour, r := min/hour2min, min%hour2min; 100*r < min {
 		return fmt.Sprintf("%d hour", hour)
 	}
 	return fmt.Sprintf("%d min", min)

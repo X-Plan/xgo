@@ -157,11 +157,32 @@ func TestReadableMaxSize(t *testing.T) {
 		{5*megaByte + 1*kiloByte, "5 MB"},
 		{5*megaByte + 200*kiloByte, "5320 KB"},
 		{100*kiloByte + 100, "100 KB"},
-		{99*kiloByte + 1014, "102390 B"},
+		{9*kiloByte + 100, "9316 B"},
 		{956, "956 B"},
 	}
 
 	for _, element := range elements {
 		xassert.Equal(t, readableMaxSize(element.maxSize), element.str)
+	}
+}
+
+func TestReadableMaxAge(t *testing.T) {
+	elements := []struct {
+		maxAge int
+		str    string
+	}{
+		{2 * year2min, "2 year"},
+		{2*year2min + 3*day2min, "2 year"},
+		{100*year2min + 1*month2min, "100 year"},
+		{5*year2min + 1*month2min, "60 month"},
+		{1*year2min + 1*month2min, "397 day"},
+		{2*month2min + 1*day2min, "9 week"},
+		{2*month2min + 2*day2min, "64 day"},
+		{10*day2min + 1*hour2min, "10 day"},
+		{1*day2min + 5*hour2min, "29 hour"},
+	}
+
+	for _, element := range elements {
+		xassert.Equal(t, readableMaxAge(element.maxAge), element.str)
 	}
 }
