@@ -144,3 +144,24 @@ func TestImport(t *testing.T) {
 		}
 	}
 }
+
+func TestReadableMaxSize(t *testing.T) {
+	elements := []struct {
+		maxSize int
+		str     string
+	}{
+		{10 * gigaByte, "10 GB"},
+		{100*gigaByte + 100*megaByte, "100 GB"},
+		{20 * megaByte, "20 MB"},
+		{5*gigaByte + 100*megaByte, "5220 MB"},
+		{5*megaByte + 1*kiloByte, "5 MB"},
+		{5*megaByte + 200*kiloByte, "5320 KB"},
+		{100*kiloByte + 100, "100 KB"},
+		{99*kiloByte + 1014, "102390 B"},
+		{956, "956 B"},
+	}
+
+	for _, element := range elements {
+		xassert.Equal(t, readableMaxSize(element.maxSize), element.str)
+	}
+}
