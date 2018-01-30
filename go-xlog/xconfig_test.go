@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2018-01-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-01-29
+// Last Change: 2018-01-30
 package xlog
 
 import (
@@ -190,6 +190,63 @@ func TestImportAndExport(t *testing.T) {
 			xassert.IsNil(t, tmp.Import(data))
 			xassert.Equal(t, xcfg, tmp)
 		} else {
+			xassert.NotNil(t, err)
+		}
+	}
+}
+
+func TestImportAndNew(t *testing.T) {
+	elements := []struct {
+		data map[string]interface{}
+		ok   bool
+	}{
+		{map[string]interface{}{
+			"dir":   "/tmp/log",
+			"level": "info",
+		}, true},
+		{map[string]interface{}{
+			"dir":         "/tmp/log",
+			"max_size":    "1 GB",
+			"max_backups": 50,
+			"tag":         "test",
+			"level":       "debug",
+		}, true},
+		{map[string]interface{}{
+			"dir":         "/tmp/log",
+			"max_size":    "1 GB",
+			"max_backups": 50,
+			"max_age":     "2 week",
+			"tag":         "test",
+			"level":       "debug",
+		}, true},
+		{map[string]interface{}{
+			"dir":     "/tmp/log",
+			"max_age": "1 month",
+			"level":   "debug",
+		}, true},
+		{map[string]interface{}{
+			"max_age": "1 year",
+		}, false},
+		{map[string]interface{}{
+			"dir": "/tmp/log",
+		}, false},
+		{map[string]interface{}{
+			"dir":         "/tmp/log",
+			"max_backups": -1,
+			"level":       "info",
+		}, false},
+	}
+
+	for _, element := range elements {
+		xcfg := &XConfig{}
+		xassert.IsNil(t, xcfg.Import(element.data))
+		xl, err := New(xcfg)
+		if element.ok {
+			xassert.NotNil(t, xl)
+			xassert.IsNil(t, err)
+			xl.Close()
+		} else {
+			xassert.IsNil(t, xl)
 			xassert.NotNil(t, err)
 		}
 	}

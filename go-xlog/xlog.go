@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2016-10-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-01-24
+// Last Change: 2018-01-30
 
 // go-xlog implement a concurrently safe rotate-log.
 package xlog
@@ -600,7 +600,7 @@ func bindDir(dir string) error {
 		dirMap[dir] = true
 		return nil
 	} else {
-		return fmt.Errorf("%s directory has been occupied")
+		return fmt.Errorf("%s directory has been occupied", dir)
 	}
 }
 
