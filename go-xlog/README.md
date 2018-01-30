@@ -69,11 +69,11 @@ Sometimes the content of a XConfig instance comes from a local configure file, a
 
 ```json
 {
-  "dir": "/tmp/log"
-  "max_size": "100 MB"
-  "max_backups": 50
-  "max_age": "1 year"
-  "tag": "test"
+  "dir": "/tmp/log",
+  "max_size": "100 MB",
+  "max_backups": 50,
+  "max_age": "1 year",
+  "tag": "test",
   "level": "info"
 }
 ```
@@ -81,19 +81,18 @@ Sometimes the content of a XConfig instance comes from a local configure file, a
 Ad you can see, the format of the local configure file is more readable.  You can use it to init a XConfig instance.
 
 ```go
-  
-  data, err := iouitl.ReadFile("config.json")
-  if err != nil {
+	data, err := ioutil.ReadFile("config.json")
+	if err != nil {
     // Handle error
-  }
+	}
 
-  configure := make(map[string]interface{})
-  if err = json.Unmarshal(data, configure); err != nil {
+	configure := make(map[string]interface{})
+	if err = json.Unmarshal(data, &configure); err != nil {
     // Handle error
-  }
+	}
 
-  xcfg := &XConfig{}
-  if err = xcfg.Import(configure); err != nil {
+	xcfg := &xlog.XConfig{}
+	if err = xcfg.Import(configure); err != nil {
     // Handle error
-  }
+	}
 ```
