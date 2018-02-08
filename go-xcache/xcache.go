@@ -16,6 +16,26 @@ type Finalizer interface {
 	Finalize(string, interface{})
 }
 
+type Cache struct {
+	n       uint32
+	buckets []*bucket
+}
+
+func New(n int, interval time.Duration) (*Cache, error) {
+}
+
+func (c *Cache) Set(k string, v interface{}) {
+	c.buckets[fnv32a(k)%c.n].set(k, v, time.Duration(0))
+}
+
+func (c *Cache) ESet(k string, v interface{}, d time.Duration) {
+	c.buckets[fnv32a(k)%c.n].set(k, v, d)
+}
+
+func (c *Cache) Get(k string) interface{} {
+	return c.buckets[fnv32a(k)%c.n].get(k)
+}
+
 type bucket struct {
 	sync.RWMutex
 	elements  map[string]element
@@ -102,4 +122,19 @@ type element struct {
 // 'expiration' field is zero, which means this element has unlimited life.
 func (e element) expired() bool {
 	return e.expiration != 0 && time.Now().UnixNano() > e.expiration
+}
+
+const (
+	offset32 = 0x811c9dc5
+	prime32  = 0x1000193
+)
+
+// Takes a string and return a 32 bit FNV-1a. This function makes no memory allocations.
+func fnv32a(s string) uint32 {
+	var h uint32 = offset32
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(key[i])
+		h *= prime32
+	}
+	return h
 }
