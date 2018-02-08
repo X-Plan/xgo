@@ -12,10 +12,14 @@ import (
 	"time"
 )
 
+type Finalizer interface {
+	Finalize(string, interface{})
+}
+
 type bucket struct {
 	sync.RWMutex
 	elements  map[string]element
-	finalizer func(string, interface{})
+	finalizer Finalizer
 }
 
 // Add an element to the bucket. If the element has existed, replacing it. If the
@@ -41,6 +45,52 @@ func (b *bucket) get(k string) interface{} {
 		return nil
 	}
 	return e.data
+}
+
+// Delete an element from the bucket. If the finalizer of the bucket has been set,
+// it will finalize that element.
+func (b *bucket) del(k string) {
+	b.Lock()
+	e, found := b.elements[k]
+	delete(b.elements, k)
+	b.Unlock()
+
+	if found && b.finalizer != nil {
+		b.finalizer.Finalize(k, e.data)
+	}
+	return
+}
+
+type pair struct {
+	key   string
+	value interface{}
+}
+
+// Clean all expired elements from the bucket.
+func (b *bucket) clean() {
+	var (
+		pairs []pair
+		now   = time.Now().UnixNano()
+	)
+
+	b.Lock()
+	for k, e := range b.elements {
+		// Because calling the expired method of an element every time will
+		// generate a timestamp, it's too costly, so inlining this method.
+		if e.expiration != 0 && now > e.expiration {
+			// Deleting one element in range loop is safe, the more detial you can
+			// get from StackOverflow or source codes.
+			delete(b.elements, k)
+			if b.finalizer != nil {
+				pairs = append(pairs, pair{k, e.data})
+			}
+		}
+	}
+	b.Unlock()
+
+	for _, pair := range pairs {
+		b.finalizer.Finalize(pair.key, pair.value)
+	}
 }
 
 type element struct {
