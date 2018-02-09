@@ -8,6 +8,7 @@
 package xcache
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -16,11 +17,60 @@ type Finalizer interface {
 	Finalize(string, interface{})
 }
 
+const (
+	MinBucketNumber  = 1
+	MaxBucketNumber  = 256
+	MinCleanInterval = 1 * time.Minute
+	MaxCleanInterval = 24 * time.Hour
+)
+
+// This configure type is used to create Cache.
+type Config struct {
+	BucketNumber  int
+	CleanInterval time.Duration
+	Finalizer     Finalizer
+}
+
+func (cfg *Config) validate() error {
+	if cfg.BucketNumber < MinBucketNumber || cfg.BucketNumber > MaxBucketNumber {
+		return fmt.Errorf("the number of bucket (%d) isn't between %d and %d", cfg.BucketNumber, MinBucketNumber, MaxBucketNumber)
+	}
+
+	if cfg.CleanInterval < MinCleanInterval || cfg.CleanInterval > MaxCleanInterval {
+		return fmt.Errorf("the clean interval (%s) isn't between %s and %s", cfg.CleanInterval, MinCleanInterval, MaxCleanInterval)
+	}
+
+	return nil
+}
+
 type Cache struct {
 	buckets  []*bucket
 	n        uint32
 	stop     chan struct{}
 	interval time.Duration
+}
+
+// Create a new Cache instance.
+func New(cfg *Config) (*Cache, error) {
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	cache := &Cache{
+		buckets:  make([]*bucket, cfg.BucketNumber),
+		n:        uint32(cfg.BucketNumber),
+		stop:     make(chan struct{}),
+		interval: cfg.CleanInterval,
+	}
+
+	for i, _ := range cache.buckets {
+		cache.buckets[i] = &bucket{
+			elements:  make(map[string]element),
+			finalizer: cfg.Finalizer,
+		}
+	}
+
+	return cache, nil
 }
 
 // Add an element to the cache. If the element has existed, replacing it.
