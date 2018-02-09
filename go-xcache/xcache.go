@@ -5,6 +5,8 @@
 // Maintainer: blinklv <blinklv@icloud.com>
 // Last Change: 2018-02-09
 
+// go-xcache package implements an concurrent-safe cache for applications running on
+// on a single machine. It supports set opeartion with expiration.
 package xcache
 
 import (
@@ -28,7 +30,11 @@ const (
 type Config struct {
 	BucketNumber  int
 	CleanInterval time.Duration
-	Finalizer     Finalizer
+
+	// When an element is out of date, it will be cleaned sliently. But maybe the
+	// element is complicated and should be released manually. This field will be
+	// applied for the element deleted.
+	Finalizer Finalizer
 }
 
 func (cfg *Config) validate() error {
@@ -69,6 +75,7 @@ func New(cfg *Config) (*Cache, error) {
 			finalizer: cfg.Finalizer,
 		}
 	}
+	go c.clean()
 
 	return cache, nil
 }
