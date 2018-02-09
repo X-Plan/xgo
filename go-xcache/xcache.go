@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2018-02-08
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-02-08
+// Last Change: 2018-02-09
 
 package xcache
 
@@ -17,23 +17,55 @@ type Finalizer interface {
 }
 
 type Cache struct {
-	n       uint32
-	buckets []*bucket
+	buckets  []*bucket
+	n        uint32
+	stop     chan struct{}
+	interval time.Duration
 }
 
-func New(n int, interval time.Duration) (*Cache, error) {
-}
-
+// Add an element to the cache. If the element has existed, replacing it.
 func (c *Cache) Set(k string, v interface{}) {
 	c.buckets[fnv32a(k)%c.n].set(k, v, time.Duration(0))
 }
 
+// Add an element to the cache with an expiration. If the element has existed,
+// replacing it. If the duration is zero, the effect is same as using Set method.
+// Otherwise the element won't be get when it has been expired.
 func (c *Cache) ESet(k string, v interface{}, d time.Duration) {
 	c.buckets[fnv32a(k)%c.n].set(k, v, d)
 }
 
+// Get an element from the cache. Return nil if this element doesn't exist or
+// has already expired.
 func (c *Cache) Get(k string) interface{} {
 	return c.buckets[fnv32a(k)%c.n].get(k)
+}
+
+// Delete an element from the cache. If the finalizer of the cache has been set,
+// it will finalize that element.
+func (c *Cache) Del(k string) {
+	c.buckets[fnv32a(k)%c.n].del(k)
+}
+
+// Calling the clean method of each bucket to clean all expired elements periodically.
+func (c *Cache) clean() {
+	ticker := time.NewTicker(c.interval)
+	for {
+		select {
+		case <-ticker.C:
+			// It's not all buckets execute clean opearation simultaneously, but
+			// one by one. It's too waste time when a bucket execute the clean
+			// method, if all buckets do this at the same time, all user requests
+			// will be blocked. So I decide clean buckets sequentially to reduce
+			// this effect.
+			for _, b := range c.buckets {
+				b.clean()
+			}
+		case <-c.stop:
+			ticker.Stop()
+			return
+		}
+	}
 }
 
 type bucket struct {
@@ -108,6 +140,7 @@ func (b *bucket) clean() {
 	}
 	b.Unlock()
 
+	// Do this opeartion need to run in a new goroutine? I'm thinking of it. :)
 	for _, pair := range pairs {
 		b.finalizer.Finalize(pair.key, pair.value)
 	}
@@ -133,7 +166,7 @@ const (
 func fnv32a(s string) uint32 {
 	var h uint32 = offset32
 	for i := 0; i < len(s); i++ {
-		h ^= uint32(key[i])
+		h ^= uint32(s[i])
 		h *= prime32
 	}
 	return h
