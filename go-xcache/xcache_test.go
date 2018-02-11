@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"hash/fnv"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -64,17 +65,18 @@ func BenchmarkStdFnv32a(b *testing.B) {
 }
 
 type counterFinalizer struct {
-	count int64
+	count *int64
 }
 
 func (cf *counterFinalizer) Finalize(string, interface{}) {
-	atomic.AddInt64(&(cf.count), int64(1))
+	atomic.AddInt64(cf.count, int64(1))
 }
 
 func TestBucket(t *testing.T) {
+	var delCount int64
 	b := &bucket{
 		elements:  make(map[string]element),
-		finalizer: &counterFinalizer{},
+		finalizer: &counterFinalizer{&delCount},
 	}
 
 	wg := &sync.WaitGroup{}
@@ -124,7 +126,7 @@ func TestBucket(t *testing.T) {
 	}
 
 	wg.Wait()
-	xassert.Equal(t, b.finalizer.(*counterFinalizer).count, int64(1000*1000))
+	xassert.Equal(t, delCount, int64(1000*1000))
 }
 
 func TestValidate(t *testing.T) {
@@ -148,4 +150,54 @@ func TestValidate(t *testing.T) {
 			xassert.NotNil(t, err)
 		}
 	}
+}
+
+func TestCache(t *testing.T) {
+	var addCount, delCount int64
+	cache, _ := New(&Config{
+		BucketNumber:  16,
+		CleanInterval: time.Minute,
+		Finalizer:     &counterFinalizer{&delCount},
+	})
+
+	go func() {
+		var begin, end = 0, 1000
+		for {
+			wg := &sync.WaitGroup{}
+			for i := begin; i < end; i++ {
+				wg.Add(1)
+				go func(i int) {
+					for j := 0; j < 1000; j++ {
+						number := i*1000 + j
+						cache.ESet(strconv.Itoa(number), number, time.Duration(i%10)*time.Second)
+					}
+					atomic.AddInt64(&addCount, int64(1000))
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
+			time.Sleep(30 * time.Second)
+			begin, end = begin+1000, end+1000
+		}
+	}()
+
+	for {
+		stats(atomic.LoadInt64(&addCount), atomic.LoadInt64(&delCount))
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func stats(addCount, delCount int64) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("Add Count = %v", addCount)
+	fmt.Printf("\tDel Count = %v", delCount)
+	fmt.Printf("\tAlloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
 }

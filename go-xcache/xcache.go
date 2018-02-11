@@ -112,6 +112,12 @@ func (c *Cache) Del(k string) {
 	c.buckets[fnv32a(k)%c.n].del(k)
 }
 
+// Close an cache. In most cases, you don't need to call this method.
+func (c *Cache) Close() error {
+	close(c.stop)
+	return nil
+}
+
 // Calling the clean method of each bucket to clean all expired elements periodically.
 func (c *Cache) clean() {
 	ticker := time.NewTicker(c.interval)
