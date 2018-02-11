@@ -8,9 +8,14 @@
 package xcache
 
 import (
+	"fmt"
 	"github.com/X-Plan/xgo/go-xassert"
 	"hash/fnv"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 var aKidsStory = []string{
@@ -56,4 +61,68 @@ func BenchmarkStdFnv32a(b *testing.B) {
 			stdFnv32a(str)
 		}
 	}
+}
+
+type counterFinalizer struct {
+	count int64
+}
+
+func (cf *counterFinalizer) Finalize(string, interface{}) {
+	atomic.AddInt64(&(cf.count), int64(1))
+}
+
+func TestBucket(t *testing.T) {
+	b := &bucket{
+		elements:  make(map[string]element),
+		finalizer: &counterFinalizer{},
+	}
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func(i int) {
+			for j := 0; j < 1000; j++ {
+				number := i*1000 + j
+				b.set(strconv.Itoa(number), number, time.Duration(i%10)*time.Second)
+			}
+			wg.Done()
+		}(i)
+	}
+
+	time.Sleep(5 * time.Second)
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func(i int) {
+			for j := 0; j < 1000; j++ {
+				number := i*1000 + j
+				v := b.get(strconv.Itoa(number))
+				if i == 0 {
+					if v.(int) != number {
+						panic(fmt.Sprintf("the value of key (%d) is %d", number, v.(int)))
+					}
+				} else {
+					if v != nil {
+						panic(fmt.Sprintf("the value of key (%d) should be nil", number))
+					}
+				}
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func(i int) {
+			for j := 0; j < 1000; j++ {
+				number := i*1000 + j
+				b.del(strconv.Itoa(number))
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+	xassert.Equal(t, b.finalizer.(*counterFinalizer).count, int64(1000*1000))
 }
