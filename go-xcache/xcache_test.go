@@ -126,3 +126,26 @@ func TestBucket(t *testing.T) {
 	wg.Wait()
 	xassert.Equal(t, b.finalizer.(*counterFinalizer).count, int64(1000*1000))
 }
+
+func TestValidate(t *testing.T) {
+	configs := []struct {
+		*Config
+		ok bool
+	}{
+		{&Config{16, 30 * time.Minute, &counterFinalizer{}}, true},
+		{&Config{32, 1 * time.Hour, nil}, true},
+		{&Config{MinBucketNumber - 1, MinCleanInterval, nil}, false},
+		{&Config{MaxBucketNumber + 1, MaxCleanInterval, nil}, false},
+		{&Config{MinBucketNumber, MinCleanInterval - time.Second, nil}, false},
+		{&Config{MinBucketNumber, MaxCleanInterval + time.Second, nil}, false},
+	}
+
+	for _, config := range configs {
+		err := config.validate()
+		if config.ok {
+			xassert.IsNil(t, err)
+		} else {
+			xassert.NotNil(t, err)
+		}
+	}
+}
