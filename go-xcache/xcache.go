@@ -6,7 +6,7 @@
 // Last Change: 2018-02-11
 
 // go-xcache package implements an concurrent-safe cache for applications running on
-// on a single machine. It supports set opeartion with expiration.
+// on a single machine. It supports set operation with expiration.
 package xcache
 
 import (
@@ -93,9 +93,9 @@ func (c *Cache) Set(k string, v interface{}) {
 	c.buckets[fnv32a(k)%c.n].set(k, v, time.Duration(0))
 }
 
-// Add an element to the cache with an expiration. If the element has existed,
+// Add an element to the cache with an duration. If the element has existed,
 // replacing it. If the duration is zero, the effect is same as using Set method.
-// Otherwise the element won't be get when it has been expired.
+// Otherwise the element won't be got when it has been expired.
 func (c *Cache) ESet(k string, v interface{}, d time.Duration) {
 	c.buckets[fnv32a(k)%c.n].set(k, v, d)
 }
