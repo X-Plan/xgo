@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2018-02-08
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-02-09
+// Last Change: 2018-02-11
 
 // go-xcache package implements an concurrent-safe cache for applications running on
 // on a single machine. It supports set opeartion with expiration.
@@ -20,6 +20,8 @@ type Finalizer interface {
 }
 
 const (
+	// I just think these two parameters can't be set any value, so I add some
+	// restrictions. I will modify it if I find it's not suitable for real cases.
 	MinBucketNumber  = 1
 	MaxBucketNumber  = 256
 	MinCleanInterval = 1 * time.Minute
@@ -28,7 +30,13 @@ const (
 
 // This configure type is used to create Cache.
 type Config struct {
-	BucketNumber  int
+	// The elements are not stored in a single pool, but distribute in many separated
+	// regions, which called 'bucket'. This parameter specifies how many buckets there are.
+	// Of course, there must exist one bucket at least.
+	BucketNumber int
+
+	// Cache will clean expired elements periodically, this parameter controls the
+	// frequency of cleaning opeartions.
 	CleanInterval time.Duration
 
 	// When an element is out of date, it will be cleaned sliently. But maybe the
@@ -75,7 +83,7 @@ func New(cfg *Config) (*Cache, error) {
 			finalizer: cfg.Finalizer,
 		}
 	}
-	go c.clean()
+	go cache.clean()
 
 	return cache, nil
 }
