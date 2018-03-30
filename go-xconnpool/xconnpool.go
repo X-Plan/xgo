@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2016-10-12
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2017-12-08
+// Last Change: 2018-03-30
 
 // go-xconnpool implement a concurrent safe connection pool, this connection
 // pool is used to manage and reuse connections. The connection created by
@@ -107,9 +107,9 @@ type XConnPool struct {
 
 // Create a new pool. capacity parameter represents the capacity of the pool,
 // factory parameter is used to generate new connections. If capacity is
-// less than or equal to zero or factory is nil, returns nil.
+// less than zero or factory is nil, returns nil.
 func New(capacity int, factory Factory) *XConnPool {
-	if capacity <= 0 {
+	if capacity < 0 {
 		return nil
 	}
 
