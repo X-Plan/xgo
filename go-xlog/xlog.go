@@ -3,7 +3,7 @@
 // Author: blinklv <blinklv@icloud.com>
 // Create Time: 2016-10-26
 // Maintainer: blinklv <blinklv@icloud.com>
-// Last Change: 2018-01-30
+// Last Change: 2018-08-24
 
 // go-xlog implement a concurrently safe rotate-log.
 package xlog
@@ -159,10 +159,13 @@ func New(xcfg *XConfig) (xl *XLogger, err error) {
 
 // Write data to the XLogger instance. You don't need call
 // this method in most cases.
-func (xl *XLogger) Write(b []byte) (n int, err error) {
+func (xl *XLogger) Write(data []byte) (n int, err error) {
 	if xl == nil {
 		return 0, nil
 	}
+
+	b := make([]byte, len(data))
+	copy(b, data)
 
 	// Write data to closed channel will throw a panic,
 	// capture this panic and return a readable error to
